@@ -1,0 +1,102 @@
+## Ignore Visual Studio temporary files, build results, and
+## user-specific files
+
+# User-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# User-specific files (MonoDevelop/Xamarin Studio)
+*.userprefs
+
+# Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+
+# Rider
+.idea/
+*.sln.iml
+
+# Visual Studio Code
+.vscode/
+
+# ASP.NET Scaffolding
+ScaffoldingReadMe.txt
+
+# Npm & Node
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# NuGet
+*.nupkg
+*.snupkg
+# The packages folder can be ignored because of PackageReference
+**/packages/*
+!**/packages/build/
+!**/packages/repositories.config
+
+# Microsoft Azure Web App publish settings
+*.PublishSettings
+
+# Others
+*.dbmdl
+*.bak
+*.log
+*.pdb
+*.cache
+*.scc
+*.vsp
+*.vspscc
+*.vssscc
+*.vspscc
+
+# Resharper
+_ReSharper*/
+*.[Rr]e[Ss]harper
+
+# Coverlet coverage
+coverage*.json
+coverage*.xml
+coverage*.info
+
+# JetBrains dotCover
+.idea/
+*.dotCover
+
+# Test results
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+
+# VS for Mac
+.vscode/
+.vscode-test/
+
+# Visual Studio working folder
+.vs
+.vs/
+
+# dotenv environment files
+.env
+.env.*
+
+# local development secrets
+secrets.json
+
+# docker files
+docker-compose.override.yml
+
+# Logs
+logs/
+*.log
