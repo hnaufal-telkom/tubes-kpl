@@ -1,0 +1,29 @@
+D:\TUBES KPL\HRLeaveApplication\HRLeaveApplication\bin\Debug\net8.0\HRLeaveApplication.exe
+D:\TUBES KPL\HRLeaveApplication\HRLeaveApplication\bin\Debug\net8.0\HRLeaveApplication.deps.json
+D:\TUBES KPL\HRLeaveApplication\HRLeaveApplication\bin\Debug\net8.0\HRLeaveApplication.runtimeconfig.json
+D:\TUBES KPL\HRLeaveApplication\HRLeaveApplication\bin\Debug\net8.0\HRLeaveApplication.dll
+D:\TUBES KPL\HRLeaveApplication\HRLeaveApplication\bin\Debug\net8.0\HRLeaveApplication.pdb
+D:\TUBES KPL\HRLeaveApplication\HRLeaveApplication\obj\Debug\net8.0\HRLeaveApplication.GeneratedMSBuildEditorConfig.editorconfig
+D:\TUBES KPL\HRLeaveApplication\HRLeaveApplication\obj\Debug\net8.0\HRLeaveApplication.AssemblyInfoInputs.cache
+D:\TUBES KPL\HRLeaveApplication\HRLeaveApplication\obj\Debug\net8.0\HRLeaveApplication.AssemblyInfo.cs
+D:\TUBES KPL\HRLeaveApplication\HRLeaveApplication\obj\Debug\net8.0\HRLeaveApplication.csproj.CoreCompileInputs.cache
+D:\TUBES KPL\HRLeaveApplication\HRLeaveApplication\obj\Debug\net8.0\HRLeaveApplication.dll
+D:\TUBES KPL\HRLeaveApplication\HRLeaveApplication\obj\Debug\net8.0\refint\HRLeaveApplication.dll
+D:\TUBES KPL\HRLeaveApplication\HRLeaveApplication\obj\Debug\net8.0\HRLeaveApplication.pdb
+D:\TUBES KPL\HRLeaveApplication\HRLeaveApplication\obj\Debug\net8.0\HRLeaveApplication.genruntimeconfig.cache
+D:\TUBES KPL\HRLeaveApplication\HRLeaveApplication\obj\Debug\net8.0\ref\HRLeaveApplication.dll
+C:\Users\User\Source\Repos\tubes-kpl\HRLeaveApplication\HRLeaveApplication\bin\Debug\net8.0\HRLeaveApplication.exe
+C:\Users\User\Source\Repos\tubes-kpl\HRLeaveApplication\HRLeaveApplication\bin\Debug\net8.0\HRLeaveApplication.deps.json
+C:\Users\User\Source\Repos\tubes-kpl\HRLeaveApplication\HRLeaveApplication\bin\Debug\net8.0\HRLeaveApplication.runtimeconfig.json
+C:\Users\User\Source\Repos\tubes-kpl\HRLeaveApplication\HRLeaveApplication\bin\Debug\net8.0\HRLeaveApplication.dll
+C:\Users\User\Source\Repos\tubes-kpl\HRLeaveApplication\HRLeaveApplication\bin\Debug\net8.0\HRLeaveApplication.pdb
+C:\Users\User\Source\Repos\tubes-kpl\HRLeaveApplication\HRLeaveApplication\obj\Debug\net8.0\HRLeaveApplication.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\User\Source\Repos\tubes-kpl\HRLeaveApplication\HRLeaveApplication\obj\Debug\net8.0\HRLeaveApplication.AssemblyInfoInputs.cache
+C:\Users\User\Source\Repos\tubes-kpl\HRLeaveApplication\HRLeaveApplication\obj\Debug\net8.0\HRLeaveApplication.AssemblyInfo.cs
+C:\Users\User\Source\Repos\tubes-kpl\HRLeaveApplication\HRLeaveApplication\obj\Debug\net8.0\HRLeaveApplication.csproj.CoreCompileInputs.cache
+C:\Users\User\Source\Repos\tubes-kpl\HRLeaveApplication\HRLeaveApplication\obj\Debug\net8.0\HRLeaveApplication.sourcelink.json
+C:\Users\User\Source\Repos\tubes-kpl\HRLeaveApplication\HRLeaveApplication\obj\Debug\net8.0\HRLeaveApplication.dll
+C:\Users\User\Source\Repos\tubes-kpl\HRLeaveApplication\HRLeaveApplication\obj\Debug\net8.0\refint\HRLeaveApplication.dll
+C:\Users\User\Source\Repos\tubes-kpl\HRLeaveApplication\HRLeaveApplication\obj\Debug\net8.0\HRLeaveApplication.pdb
+C:\Users\User\Source\Repos\tubes-kpl\HRLeaveApplication\HRLeaveApplication\obj\Debug\net8.0\HRLeaveApplication.genruntimeconfig.cache
+C:\Users\User\Source\Repos\tubes-kpl\HRLeaveApplication\HRLeaveApplication\obj\Debug\net8.0\ref\HRLeaveApplication.dll
