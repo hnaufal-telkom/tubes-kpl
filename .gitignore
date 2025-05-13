@@ -37,7 +37,12 @@ bld/
 .vs/
 # Uncomment if you have tasks that create the project's static files in wwwroot
 #wwwroot/
+# Rider
+.idea/
+*.sln.iml
 
+# Visual Studio Code
+.vscode/
 # Visual Studio 2017 auto generated files
 Generated\ Files/
 
@@ -66,6 +71,10 @@ artifacts/
 # ASP.NET Scaffolding
 ScaffoldingReadMe.txt
 
+# Npm & Node
+node_modules/
+npm-debug.log
+yarn-error.log
 # StyleCop
 StyleCopReport.xml
 
@@ -97,6 +106,13 @@ StyleCopReport.xml
 *.pidb
 *.svclog
 *.scc
+# NuGet
+*.nupkg
+*.snupkg
+# The packages folder can be ignored because of PackageReference
+**/packages/*
+!**/packages/build/
+!**/packages/repositories.config
 
 # Chutzpah Test files
 _Chutzpah*
@@ -111,7 +127,16 @@ ipch/
 *.cachefile
 *.VC.db
 *.VC.VC.opendb
+# Microsoft Azure Web App publish settings
+*.PublishSettings
 
+# Others
+*.dbmdl
+*.bak
+*.log
+*.pdb
+*.cache
+*.scc
 # Visual Studio profiler
 *.psess
 *.vsp
@@ -126,6 +151,9 @@ $tf/
 
 # Guidance Automation Toolkit
 *.gpState
+*.vspscc
+*.vssscc
+*.vspscc
 
 # ReSharper is a .NET coding add-in
 _ReSharper*/
@@ -147,7 +175,13 @@ coverage*.json
 coverage*.xml
 coverage*.info
 
-# Visual Studio code coverage results
+# JetBrains dotCover
+.idea/
+*.dotCover
+
+# Test results
+TestResults/
+*.trx
 *.coverage
 *.coveragexml
 
@@ -346,18 +380,34 @@ ASALocalRun/
 
 # MFractors (Xamarin productivity tool) working folder
 .mfractor/
+# VS for Mac
+.vscode/
+.vscode-test/
 
+# Visual Studio working folder
+.vs
+.vs/
 # Local History for Visual Studio
 .localhistory/
 
 # BeatPulse healthcheck temp database
 healthchecksdb
+# dotenv environment files
+.env
+.env.*
 
+# local development secrets
+secrets.json
 # Backup folder for Package Reference Convert tool in Visual Studio 2017
 MigrationBackup/
 
 # Ionide (cross platform F# VS Code tools) working folder
 .ionide/
+# docker files
+docker-compose.override.yml
 
+# Logs
+logs/
+*.log
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
