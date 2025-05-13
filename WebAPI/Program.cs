@@ -1,15 +1,24 @@
+using MainLibrary;
+using Microsoft.AspNetCore.Mvc;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-
 builder.Services.AddControllers();
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+builder.Services.AddSingleton<IUserRepository, InMemoryUserRepository>();
+builder.Services.AddSingleton<ILeaveRequestRepository, InMemoryLeaveRequestRepository>();
+builder.Services.AddSingleton<IBusinessTripRepository, InMemoryBusinessTripRepository>();
+builder.Services.AddSingleton<IPayrollRepository, InMemoryPayrollRepository>();
+
+builder.Services.AddSingleton<IUserService, UserService>();
+builder.Services.AddSingleton<LeaveService>();
+builder.Services.AddSingleton<BusinessTripService>();
+builder.Services.AddSingleton<PayrollService>();
+
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
