@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using MainLibrary;
 
 // Define the different states of the application
 public enum AppState
@@ -99,9 +100,9 @@ public class Program
         Console.WriteLine("3. Business Trip Management");
         Console.WriteLine("4. Payroll Report");
         Console.WriteLine("5. Logout");
+
         Console.WriteLine("6. Exit");
         Console.Write("Enter your choice: ");
-
         string choice = Console.ReadLine();
 
         switch (choice)
