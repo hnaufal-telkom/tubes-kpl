@@ -1,4 +1,7 @@
-﻿using System.Text.RegularExpressions;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text.RegularExpressions;
 
 namespace MainLibrary
 {
@@ -42,7 +45,7 @@ namespace MainLibrary
         public required string Purpose { get; set; }
         public RequestStatus Status { get; set; } = RequestStatus.Pending;
         public decimal EstimatedCost { get; set; }
-        public decimal ActualCost { get; set; }
+        public decimal ActualCost { get; set; } = 0;
         public string? ApproverId { get; set; }
         public string? RejectionReason { get; set; }
         public DateTime RequestDate { get; set; } = DateTime.Now;
@@ -64,61 +67,277 @@ namespace MainLibrary
         public bool IsPaid { get; set; } = false;
     }
 
+    public interface IUserRepository
+    {
+        User GetById(string id);
+        IEnumerable<User> GetAll();
+        void Add(User user);
+        void Update(User user);
+        void Delete(string id);
+        bool Exists(string email);
+        User GetByEmail(string email);
+    }
+
     public interface IUserService
     {
-        User GetUserById(string id);
-        IEnumerable<User> GetAllUsers();
-        void AddUser(User user);
+        User Register(string name, string email, string password, Role role);
+        User? Authenticate(string email, string password);
+        User GetUserById(string userId);
+        void UpdateUserDetails(string userId, string name, string email);
+        void ChangePassword(string userId, string currentPassword, string newPassword);
+        void DeactivateUser(string userId);
+        void PromoteUser(string userId, Role newRole);
+        void ResetPassword(string userId, string newPassword);
         void UpdateUser(User user);
-        void DeleteUser(string id);
-        bool Exists(string email);
     }
 
     public interface ILeaveRequestRepository
     {
-        LeaveRequest GetLeaveById(string id);
+        LeaveRequest GetById(string id);
         IEnumerable<LeaveRequest> GetByUserId(string userId);
-        IEnumerable<LeaveRequest> GetPendingLeaveRequests();
-        void AddPendingRequest(LeaveRequest request);
-        void UpdatePendingRequest(LeaveRequest request);
+        IEnumerable<LeaveRequest> GetPendingRequests();
+        void Add(LeaveRequest request);
+        void Update(LeaveRequest request);
     }
 
     public interface IBusinessTripRepository
     {
-        BusinessTrip GetBusinessTripById(string id);
-        IEnumerable<BusinessTrip> GetBusinessTripByUserId(string userId);
-        IEnumerable<BusinessTrip> GetPendingBusinessRequest();
+        BusinessTrip GetById(string id);
+        IEnumerable<BusinessTrip> GetByUserId(string userId);
+        IEnumerable<BusinessTrip> GetPendingRequests();
         void Add(BusinessTrip businessTrip);
         void Update(BusinessTrip businessTrip);
     }
 
     public interface IPayrollRepository
     {
-        Payroll GetPayrollById(string id);
-        IEnumerable<Payroll> GetPayrollByUserId(string userId);
-        IEnumerable<Payroll> GetPayrollByPeriod(DateTime start, DateTime end);
+        Payroll GetById(string id);
+        IEnumerable<Payroll> GetByUserId(string userId);
+        IEnumerable<Payroll> GetByPeriod(DateTime start, DateTime end);
         void Add(Payroll payroll);
         void Update(Payroll payroll);
     }
 
+    public class InMemoryUserRepository : IUserRepository
+    {
+        private readonly List<User> _users = new();
+        private readonly object _lock = new();
+
+        public User GetById(string id)
+        {
+            lock (_lock)
+            {
+                return _users.FirstOrDefault(u => u.Id == id) ?? throw new KeyNotFoundException("User not found");
+            }
+        }
+
+        public User GetByEmail(string email)
+        {
+            lock (_lock)
+            {
+                return _users.FirstOrDefault(u => u.Email.Equals(email, StringComparison.OrdinalIgnoreCase)) ?? throw new KeyNotFoundException("User not found");
+            }
+        }
+
+        public IEnumerable<User> GetAll()
+        {
+            lock (_lock)
+            {
+                return _users.ToList();
+            }
+        }
+
+        public void Add(User user)
+        {
+            lock (_lock)
+            {
+                if (_users.Any(u => u.Email.Equals(user.Email, StringComparison.OrdinalIgnoreCase))) throw new InvalidOperationException("Email already exists");
+
+                _users.Add(user);
+            }
+        }
+
+        public void Update(User user)
+        {
+            lock (_lock)
+            {
+                var index = _users.FindIndex(u => u.Id == user.Id);
+                if (index >= 0) _users[index] = user;
+            }
+        }
+
+        public void Delete(string id)
+        {
+            lock (_lock)
+            {
+                _users.RemoveAll(u => u.Id == id);
+            }
+        }
+
+        public bool Exists(string email)
+        {
+            lock (_lock)
+            {
+                return _users.Any(u => u.Email.Equals(email, StringComparison.OrdinalIgnoreCase));
+            }
+        }
+    }
+
+    public class InMemoryLeaveRequestRepository : ILeaveRequestRepository
+    {
+        private readonly List<LeaveRequest> _requests = new();
+        private readonly object _lock = new();
+
+        public LeaveRequest GetById(string id)
+        {
+            lock (_lock)
+            {
+                return _requests.FirstOrDefault(r => r.Id == id) ?? throw new KeyNotFoundException("Leave request not found");
+            }
+        }
+
+        public IEnumerable<LeaveRequest> GetByUserId(string userId)
+        {
+            lock (_lock)
+            {
+                return _requests.Where(r => r.UserId == userId).ToList();
+            }
+        }
+
+        public IEnumerable<LeaveRequest> GetPendingRequests()
+        {
+            lock (_lock)
+            {
+                return _requests.Where(r => r.Status == RequestStatus.Pending).ToList();
+            }
+        }
+
+        public void Add(LeaveRequest request)
+        {
+            lock (_lock)
+            {
+                _requests.Add(request);
+            }
+        }
+
+        public void Update(LeaveRequest request)
+        {
+            lock (_lock)
+            {
+                var index = _requests.FindIndex(r => r.Id == request.Id);
+                if (index >= 0) _requests[index] = request;
+            }
+        }
+    }
+
+    public class InMemoryBusinessTripRepository : IBusinessTripRepository
+    {
+        private readonly List<BusinessTrip> _trips = new();
+        private readonly object _lock = new();
+
+        public BusinessTrip GetById(string id)
+        {
+            lock (_lock)
+            {
+                return _trips.FirstOrDefault(t => t.Id == id) ?? throw new KeyNotFoundException("Business trip not found");
+            }
+        }
+
+        public IEnumerable<BusinessTrip> GetByUserId(string userId)
+        {
+            lock (_lock)
+            {
+                return _trips.Where(t => t.UserId == userId).ToList();
+            }
+        }
+
+        public IEnumerable<BusinessTrip> GetPendingRequests()
+        {
+            lock (_lock)
+            {
+                return _trips.Where(t => t.Status == RequestStatus.Pending).ToList();
+            }
+        }
+
+        public void Add(BusinessTrip businessTrip)
+        {
+            lock (_lock)
+            {
+                _trips.Add(businessTrip);
+            }
+        }
+
+        public void Update(BusinessTrip businessTrip)
+        {
+            lock (_lock)
+            {
+                var index = _trips.FindIndex(t => t.Id == businessTrip.Id);
+                if (index >= 0) _trips[index] = businessTrip;
+            }
+        }
+    }
+
+    public class InMemoryPayrollRepository : IPayrollRepository
+    {
+        private readonly List<Payroll> _payrolls = new();
+        private readonly object _lock = new();
+
+        public Payroll GetById(string id)
+        {
+            lock (_lock)
+            {
+                return _payrolls.FirstOrDefault(p => p.Id == id) ?? throw new KeyNotFoundException("Payroll not found");
+            }
+        }
+
+        public IEnumerable<Payroll> GetByUserId(string userId)
+        {
+            lock (_lock)
+            {
+                return _payrolls.Where(p => p.UserId == userId).ToList();
+            }
+        }
+
+        public IEnumerable<Payroll> GetByPeriod(DateTime start, DateTime end)
+        {
+            lock (_lock)
+            {
+                return _payrolls.Where(p => p.PeriodStart >= start && p.PeriodEnd <= end).ToList();
+            }
+        }
+
+        public void Add(Payroll payroll)
+        {
+            lock (_lock)
+            {
+                _payrolls.Add(payroll);
+            }
+        }
+
+        public void Update(Payroll payroll)
+        {
+            lock (_lock)
+            {
+                var index = _payrolls.FindIndex(p => p.Id == payroll.Id);
+                if (index >= 0) _payrolls[index] = payroll;
+            }
+        }
+    }
+
     public class UserService : IUserService
     {
-        private readonly IUserService _repository;
+        private readonly IUserRepository _repository;
 
-        public UserService(IUserService repository)
+        public UserService(IUserRepository repository)
         {
             _repository = repository;
         }
-
-        public User GetUserById(string id) => _repository.GetUserById(id);
-        public IEnumerable<User> GetAllUsers() => _repository.GetAllUsers();
-        public bool Exists(string email) => _repository.Exists(email);
 
         public User Register(string name, string email, string password, Role role)
         {
             if (!IsValidEmail(email)) throw new ArgumentException("Invalid email format");
             if (_repository.Exists(email)) throw new ArgumentException("Email already registered");
-            if (password.Length < 8) throw new ArgumentException("Password must be at least 8 character");
+            if (password.Length < 8) throw new ArgumentException("Password must be at least 8 characters");
 
             var user = new User
             {
@@ -130,97 +349,101 @@ namespace MainLibrary
                 JoinDate = DateTime.Now
             };
 
-            _repository.AddUser(user);
+            _repository.Add(user);
             return user;
         }
 
         public User? Authenticate(string email, string password)
         {
-            var user = _repository.GetAllUsers().FirstOrDefault(x => x.Email == email);
-            if (user == null || !VerifyPassword(password, user.Password)) return null;
-
-            return user;
+            try
+            {
+                var user = _repository.GetByEmail(email);
+                return user.Password == password ? user : null;
+            }
+            catch (KeyNotFoundException)
+            {
+                return null;
+            }
         }
 
-        public void AddUser(User user)
+        public User GetUserById(string userId)
         {
-            if (!IsValidEmail(user.Email)) throw new ArgumentException("Invalid email format");
-            _repository.AddUser(user);
-        }
-
-        public void UpdateUser(User user)
-        {
-            if (!IsValidEmail(user.Email)) throw new ArgumentException("Invalid email format");
-            _repository.UpdateUser(user);
+            return _repository.GetById(userId);
         }
 
         public void UpdateUserDetails(string userId, string name, string email)
         {
             if (!IsValidEmail(email)) throw new ArgumentException("Invalid email format");
 
-            var user = _repository.GetUserById(userId);
-            if (user == null) throw new KeyNotFoundException("User not found");
-
+            var user = _repository.GetById(userId);
             user.Name = name;
             user.Email = email;
-            _repository.UpdateUser(user);
+            _repository.Update(user);
         }
 
         public void ChangePassword(string userId, string currentPassword, string newPassword)
         {
-            if (newPassword.Length < 8)
-                throw new ArgumentException("Password must be at least 8 characters");
+            if (newPassword.Length < 8) throw new ArgumentException("Password must be at least 8 characters");
 
-            var user = _repository.GetUserById(userId);
-            if (user == null || !VerifyPassword(currentPassword, user.Password)) throw new UnauthorizedAccessException("Invalid credentials");
+            var user = _repository.GetById(userId);
+            if (user.Password != currentPassword)
+                throw new UnauthorizedAccessException("Invalid credentials");
 
             user.Password = newPassword;
-            _repository.UpdateUser(user);
+            _repository.Update(user);
         }
 
         public void DeactivateUser(string userId)
         {
-            var user = _repository.GetUserById(userId);
-            if (user == null) throw new KeyNotFoundException("User not found");
+            var user = _repository.GetById(userId);
             user.IsActive = false;
-            _repository.UpdateUser(user);
+            _repository.Update(user);
         }
 
-        public void DeleteUser(string id)
+        public void PromoteUser(string userId, Role newRole)
         {
-            _repository.DeleteUser(id);
+            var user = _repository.GetById(userId);
+            user.Role = newRole;
+            _repository.Update(user);
+        }
+
+        public void ResetPassword(string userId, string newPassword)
+        {
+            if (newPassword.Length < 8) throw new ArgumentException("Password must be at least 8 characters");
+
+            var user = _repository.GetById(userId);
+            user.Password = newPassword;
+            _repository.Update(user);
+        }
+
+        public void UpdateUser(User user)
+        {
+            _repository.Update(user);
         }
 
         private static bool IsValidEmail(string email)
         {
             return Regex.IsMatch(email, @"^[^@\s]+@[^@\s]+\.[^@\s]+$");
         }
-
-        private static bool VerifyPassword(string inputPassword, string savePassword)
-        {
-            return inputPassword == savePassword;
-        }
     }
 
     public class LeaveService
     {
         private readonly ILeaveRequestRepository _leaveRepository;
-        private readonly IUserService _userRepository;
+        private readonly IUserService _userService;
 
-        public LeaveService(ILeaveRequestRepository leaveRepository, IUserService userRepository)
+        public LeaveService(ILeaveRequestRepository leaveRepository, IUserService userService)
         {
             _leaveRepository = leaveRepository;
-            _userRepository = userRepository;
+            _userService = userService;
         }
 
         public LeaveRequest SubmitRequest(string userId, DateTime startDate, DateTime endDate, string description)
         {
             if (startDate < DateTime.Today) throw new ArgumentException("Start date cannot be in the past");
-
             if (startDate > endDate) throw new ArgumentException("End date must be after start date");
 
-            var user = _userRepository.GetUserById(userId);
-            if (user == null) throw new KeyNotFoundException("User not found");
+            var user = _userService.GetUserById(userId);
 
             var duration = (endDate - startDate).Days + 1;
             if (user.RemainingLeaveDays < duration) throw new InvalidOperationException("Not enough remaining leave days");
@@ -236,17 +459,14 @@ namespace MainLibrary
                 Status = RequestStatus.Pending
             };
 
-            _leaveRepository.AddPendingRequest(request);
+            _leaveRepository.Add(request);
             return request;
         }
 
         public void ApproveRequest(string requestId, string approverId)
         {
-            var request = _leaveRepository.GetLeaveById(requestId);
-            if (request == null) throw new KeyNotFoundException("Request not found");
-
-            var user = _userRepository.GetUserById(request.UserId);
-            if (user == null) throw new KeyNotFoundException("User not found");
+            var request = _leaveRepository.GetById(requestId);
+            var user = _userService.GetUserById(request.UserId);
 
             var duration = request.Duration;
             user.RemainingLeaveDays -= duration;
@@ -255,28 +475,26 @@ namespace MainLibrary
             request.ApproverId = approverId;
             request.ApprovalDate = DateTime.Now;
 
-            _leaveRepository.UpdatePendingRequest(request);
-            _userRepository.UpdateUser(user);
+            _leaveRepository.Update(request);
+            _userService.UpdateUser(user);
         }
 
         public void RejectRequest(string requestId, string approverId, string reason)
         {
             if (string.IsNullOrWhiteSpace(reason)) throw new ArgumentException("Rejection reason is required");
 
-            var request = _leaveRepository.GetLeaveById(requestId);
-            if (request == null) throw new KeyNotFoundException("Request not found");
-
+            var request = _leaveRepository.GetById(requestId);
             request.Status = RequestStatus.Rejected;
             request.ApproverId = approverId;
             request.ApprovalDate = DateTime.Now;
             request.RejectionReason = reason;
 
-            _leaveRepository.UpdatePendingRequest(request);
+            _leaveRepository.Update(request);
         }
 
-        public IEnumerable<LeaveRequest> GetPendingLeaveRequests()
+        public IEnumerable<LeaveRequest> GetPendingRequests()
         {
-            return _leaveRepository.GetPendingLeaveRequests();
+            return _leaveRepository.GetPendingRequests();
         }
 
         public IEnumerable<LeaveRequest> GetByUserId(string userId)
@@ -288,24 +506,21 @@ namespace MainLibrary
     public class BusinessTripService
     {
         private readonly IBusinessTripRepository _tripRepository;
-        private readonly IUserService _userRepository;
+        private readonly IUserService _userService;
 
-        public BusinessTripService(IBusinessTripRepository tripRepository, IUserService userRepository)
+        public BusinessTripService(IBusinessTripRepository tripRepository, IUserService userService)
         {
             _tripRepository = tripRepository;
-            _userRepository = userRepository;
+            _userService = userService;
         }
 
         public BusinessTrip SubmitRequest(string userId, string destination, DateTime startDate, DateTime endDate, string purpose, decimal estimateCost)
         {
             if (startDate < DateTime.Today) throw new ArgumentException("Start date cannot be in the past");
-
             if (startDate > endDate) throw new ArgumentException("End date must be after start date");
-
             if (estimateCost <= 0) throw new ArgumentException("Estimated cost must be positive");
 
-            var user = _userRepository.GetUserById(userId);
-            if (user == null) throw new KeyNotFoundException("User not found");
+            var user = _userService.GetUserById(userId);
 
             var trip = new BusinessTrip
             {
@@ -316,8 +531,8 @@ namespace MainLibrary
                 EndDate = endDate,
                 Purpose = purpose,
                 EstimatedCost = estimateCost,
-                Status = RequestStatus.Pending,
-                RequestDate = DateTime.Now
+                RequestDate = DateTime.Now,
+                Status = RequestStatus.Pending
             };
 
             _tripRepository.Add(trip);
@@ -326,13 +541,10 @@ namespace MainLibrary
 
         public void ApproveRequest(string tripId, string approverId)
         {
-            var trip = _tripRepository.GetBusinessTripById(tripId);
-            if (trip == null) throw new KeyNotFoundException("Trip request not found");
-
+            var trip = _tripRepository.GetById(tripId);
             trip.Status = RequestStatus.Approved;
             trip.ApproverId = approverId;
             trip.ApprovalDate = DateTime.Now;
-
             _tripRepository.Update(trip);
         }
 
@@ -340,14 +552,11 @@ namespace MainLibrary
         {
             if (string.IsNullOrWhiteSpace(reason)) throw new ArgumentException("Rejection reason is required");
 
-            var trip = _tripRepository.GetBusinessTripById(tripId);
-            if (trip == null) throw new KeyNotFoundException("Trip request not found");
-
+            var trip = _tripRepository.GetById(tripId);
             trip.Status = RequestStatus.Rejected;
             trip.ApproverId = approverId;
             trip.ApprovalDate = DateTime.Now;
             trip.RejectionReason = reason;
-
             _tripRepository.Update(trip);
         }
 
@@ -355,21 +564,19 @@ namespace MainLibrary
         {
             if (actualCost < 0) throw new ArgumentException("Actual cost cannot be negative");
 
-            var trip = _tripRepository.GetBusinessTripById(tripId);
-            if (trip == null) throw new KeyNotFoundException("Trip request not found");
-
+            var trip = _tripRepository.GetById(tripId);
             trip.ActualCost = actualCost;
             _tripRepository.Update(trip);
         }
 
-        public IEnumerable<BusinessTrip> GetBusinessTripByUserId(string userId)
+        public IEnumerable<BusinessTrip> GetByUserId(string userId)
         {
-            return _tripRepository.GetBusinessTripByUserId(userId);
+            return _tripRepository.GetByUserId(userId);
         }
 
-        public IEnumerable<BusinessTrip> GetPendingBusinessTripRequests()
+        public IEnumerable<BusinessTrip> GetPendingRequests()
         {
-            return _tripRepository.GetPendingBusinessRequest();
+            return _tripRepository.GetPendingRequests();
         }
     }
 
@@ -379,15 +586,17 @@ namespace MainLibrary
         private readonly IUserService _userService;
         private readonly ILeaveRequestRepository _leaveRequestRepository;
         private readonly IBusinessTripRepository _businessTripRepository;
-        
 
-        public PayrollService(IPayrollRepository payrollRepository, IUserService userService, ILeaveRequestRepository leaveRequestRepository, IBusinessTripRepository businessTripRepository)
+        public PayrollService(
+            IPayrollRepository payrollRepository,
+            IUserService userService,
+            ILeaveRequestRepository leaveRequestRepository,
+            IBusinessTripRepository businessTripRepository)
         {
             _payrollRepository = payrollRepository;
             _userService = userService;
             _leaveRequestRepository = leaveRequestRepository;
             _businessTripRepository = businessTripRepository;
-
         }
 
         public Payroll GeneratePayroll(string userId, DateTime periodStart, DateTime periodEnd)
@@ -395,19 +604,13 @@ namespace MainLibrary
             if (periodStart >= periodEnd) throw new ArgumentException("Period end must be after period start");
 
             var user = _userService.GetUserById(userId);
-            if (user == null) throw new KeyNotFoundException("User not found");
 
-            var leaves = _leaveRequestRepository.GetByUserId(userId)
-                .Where(l => l.Status == RequestStatus.Approved &&
-                          l.StartDate >= periodStart &&
-                          l.EndDate <= periodEnd);
-
-            var trips = _businessTripRepository.GetBusinessTripByUserId(userId)
+            var trips = _businessTripRepository.GetByUserId(userId)
                 .Where(t => t.Status == RequestStatus.Approved &&
                           t.StartDate >= periodStart &&
                           t.EndDate <= periodEnd);
 
-            decimal travelAllowance = trips.Sum(trip => trip.EstimatedCost * 0.1m);
+            decimal travelAllowance = trips.Sum(t => t.EstimatedCost * 0.1m);
 
             var payroll = new Payroll
             {
@@ -428,22 +631,21 @@ namespace MainLibrary
 
         public void MarkAsPaid(string payrollId)
         {
-            var payroll = _payrollRepository.GetPayrollById(payrollId);
-            if (payroll == null) throw new KeyNotFoundException("Payroll not found");
-
+            var payroll = _payrollRepository.GetById(payrollId);
             payroll.IsPaid = true;
             payroll.PaymentDate = DateTime.Now;
             _payrollRepository.Update(payroll);
         }
 
-        public IEnumerable<Payroll> GetUserPayrolls(string userId)
+        public IEnumerable<Payroll> GetByUserId(string userId)
         {
-            return _payrollRepository.GetPayrollByUserId(userId);
+            return _payrollRepository.GetByUserId(userId);
         }
 
-        public IEnumerable<Payroll> GetPayrollByPeriod(DateTime start, DateTime end)
+        public IEnumerable<Payroll> GetByPeriod(DateTime start, DateTime end)
         {
-            return _payrollRepository.GetPayrollByPeriod(start, end);
+            if (start > end) throw new ArgumentException("End date must be after start date");
+            return _payrollRepository.GetByPeriod(start, end);
         }
 
         private decimal CalculateBasicSalary(User user)
