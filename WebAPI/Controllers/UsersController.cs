@@ -1,6 +1,5 @@
 ﻿using MainLibrary;
 using Microsoft.AspNetCore.Mvc;
-using System.Collections.Generic;
 
 namespace WebAPI.Controllers
 {
@@ -8,35 +7,77 @@ namespace WebAPI.Controllers
     [Route("api/[controller]")]
     public class UsersController : ControllerBase
     {
-        private readonly IUserService userService;
+        private readonly IUserService _usersService;
 
         public UsersController(IUserService userService)
         {
-            this.userService = userService;
+            _usersService = userService;
         }
 
         [HttpGet]
-        public ActionResult<IEnumerable<User>> GetAllUsers([FromServices] IUserService userService)
+        public ActionResult<IEnumerable<User>> GetAll()
         {
-            return Ok(userService.GetAllUsers());
+            var repo = (InMemoryUserRepository)_usersService.GetType()
+                .GetField("_repository", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                .GetValue(_usersService);
+            return Ok(repo.GetAll());
         }
 
         [HttpGet("{id}")]
-        public ActionResult<User> GetUserById(string id, [FromServices] IUserService userService)
+        public ActionResult<User> GetById(string id)
         {
-            var user = userService.GetUserById(id);
-            if (user == null) return NotFound();
-            return Ok(user);
+            try
+            {
+                return Ok(_usersService.GetUserById(id));
+            }
+            catch (KeyNotFoundException)
+            {
+                return NotFound();
+            }
+        }
+
+        [HttpPost]
+        public ActionResult<User> Create([FromBody] User user)
+        {
+            try
+            {
+                var createdUser = _usersService.Register(user.Name, user.Email, user.Password, user.Role);
+                return CreatedAtAction(nameof(GetById), new { id = createdUser.Id }, createdUser);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
+        [HttpPut("{id}")]
+        public IActionResult Update(string id, [FromBody] User user)
+        {
+            if (id != user.Id) return BadRequest("ID mismatch");
+
+            try
+            {
+                _usersService.UpdateUser(user);
+                return NoContent();
+            }
+            catch (KeyNotFoundException)
+            {
+                return NotFound();
+            }
         }
 
         [HttpDelete("{id}")]
-        public IActionResult DeleteUser(string id, [FromServices] IUserService userService)
+        public IActionResult Delete(string id)
         {
-            var user = userService.GetUserById(id);
-            if (user == null) return NotFound();
-
-            userService.DeleteUser(id);
-            return NoContent();
+            try
+            {
+                _usersService.DeactivateUser(id);
+                return NoContent();
+            }
+            catch (KeyNotFoundException)
+            {
+                return NotFound();
+            }
         }
     }
 }
