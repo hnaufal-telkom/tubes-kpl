@@ -4,6 +4,7 @@ using MainLibrary;
 using User = MainLibrary.User;
 using LeaveRequest = MainLibrary.LeaveRequest;
 using BusinessTrip = MainLibrary.BusinessTrip;
+using System.Net.Http.Headers;
 
 // Define the different states of the application
 public enum AppState
@@ -27,14 +28,19 @@ public class Program
 
     private static User loggedInUser = null;
     private static AppState currentState = AppState.Login;
+    private static AppState previousState = AppState.Login;
 
     public static void Main(string[] args)
     {
-        userService = new UserService(new MockUserRepository());
-        leaveService = new LeaveService(new MockLeaveRequestRepository(), userService);
-        businessTripService = new BusinessTripService(new MockBusinessTripRepository(), userService);
-        payrollService = new PayrollService(new MockPayrollRepository(), userService,
-                                          new MockLeaveRequestRepository(), new MockBusinessTripRepository());
+        var userRepo = new InMemoryUserRepository();
+        var leaveRepo = new InMemoryLeaveRequestRepository();
+        var tripRepo = new InMemoryBusinessTripRepository();
+        var payrollRepo = new InMemoryPayrollRepository();
+
+        userService = new UserService(userRepo);
+        leaveService = new LeaveService(leaveRepo, userService);
+        businessTripService = new BusinessTripService(tripRepo, userService);
+        payrollService = new PayrollService(payrollRepo, userService, leaveRepo, tripRepo);
 
         // Add some initial users for testing
         InitializeTestData();
@@ -44,7 +50,14 @@ public class Program
         // Main application loop (Automata)
         while (currentState != AppState.Exit)
         {
-            ProcessState();
+            try
+            {
+                ProcessState();
+            }
+            catch (Exception ex)
+            {
+                HandleError(ex);
+            }
         }
 
         Console.WriteLine("Thank you for using the Company Management System!");
@@ -53,27 +66,11 @@ public class Program
     {
         try
         {
-            // Add some test users if they don't exist
-            if (!userService.Exists("admin@company.com"))
-            {
                 userService.Register("Admin User", "admin@company.com", "Admin123!", Role.SysAdmin);
-            }
-            if (!userService.Exists("hr@company.com"))
-            {
                 userService.Register("HR Manager", "hr@company.com", "Hr123456!", Role.HRD);
-            }
-            if (!userService.Exists("supervisor@company.com"))
-            {
                 userService.Register("Team Supervisor", "supervisor@company.com", "Super123!", Role.Supervisor);
-            }
-            if (!userService.Exists("finance@company.com"))
-            {
                 userService.Register("Finance Officer", "finance@company.com", "Finance1!", Role.Finance);
-            }
-            if (!userService.Exists("employee@company.com"))
-            {
                 userService.Register("Regular Employee", "employee@company.com", "Employee1!", Role.Employee);
-            }
         }
         catch (Exception ex)
         {
@@ -107,6 +104,21 @@ public class Program
         }
     }
 
+    private static void HandleError(Exception ex)
+    {
+        Console.Clear();
+        Console.WriteLine($"Error: {ex.Message}");
+        Console.WriteLine("Press Enter to continue...");
+        Console.ReadLine();
+        currentState = previousState;
+    }
+
+    private static void TransitionTo(AppState newState)
+    {
+        previousState = currentState;
+        currentState = newState;
+    }
+
     private static void ShowLogin()
     {
         Console.Clear();
@@ -121,7 +133,7 @@ public class Program
         if (loggedInUser != null)
         {
             Console.WriteLine($"Login successful! Welcome, {loggedInUser.Name}");
-            currentState = AppState.MainMenu;
+            TransitionTo(AppState.MainMenu);
         }
         else
         {
@@ -134,124 +146,98 @@ public class Program
 
     private static void ShowMainMenu()
     {
-        Console.Clear();
-        Console.WriteLine($"\n--- Main Menu ({loggedInUser.Name} - {loggedInUser.Role}) ---");
-        Console.WriteLine("1. User Management");
-        Console.WriteLine("2. Leave Request");
-        Console.WriteLine("3. Business Trip Management");
-        Console.WriteLine("4. Payroll Report");
-        Console.WriteLine("5. Logout");
-        Console.WriteLine("6. Exit");
-        Console.Write("Enter your choice: ");
+        var choice = Helper.ShowMenu(
+            $"Main Menu ({loggedInUser.Name} - {loggedInUser.Role})",
+            new Dictionary<string, string>
+            {
+                ["1"] = "User Management",
+                ["2"] = "Leave Request",
+                ["3"] = "Business Trip Management",
+                ["4"] = "Payroll Report",
+                ["5"] = "Logout",
+                ["6"] = "Exit"
+            });
 
-        string choice = Console.ReadLine();
-
-        switch (choice)
+        Helper.HandleMenuSelection(choice, new Dictionary<string, Action>
         {
-            case "1":
+            ["1"] = () =>
+            {
                 if (loggedInUser.Role.CanManageUsers())
-                {
-                    currentState = AppState.UserManagementMenu;
-                }
+                    TransitionTo(AppState.UserManagementMenu);
                 else
                 {
-                    Console.WriteLine("You don't have permission to access this menu.");
+                    Console.WriteLine("\nYou don't have permission to access this menu.");
                     Console.ReadLine();
                 }
-                break;
-            case "2":
-                currentState = AppState.LeaveRequestMenu;
-                break;
-            case "3":
-                currentState = AppState.BusinessTripMenu;
-                break;
-            case "4":
+            },
+            ["2"] = () => TransitionTo(AppState.LeaveRequestMenu),
+            ["3"] = () => TransitionTo(AppState.BusinessTripMenu),
+            ["4"] = () =>
+            {
                 if (loggedInUser.Role.CanManagePayroll())
-                {
-                    currentState = AppState.PayrollReportMenu;
-                }
+                    TransitionTo(AppState.PayrollReportMenu);
                 else
                 {
-                    Console.WriteLine("You don't have permission to access this menu.");
+                    Console.WriteLine("\nYou don't have permission to access this menu.");
                     Console.ReadLine();
                 }
-                break;
-            case "5":
+            },
+            ["5"] = () =>
+            {
                 loggedInUser = null;
-                currentState = AppState.Login;
+                TransitionTo(AppState.Login);
                 Console.WriteLine("Logged out successfully.");
-                Console.ReadLine();
-                break;
-            case "6":
-                currentState = AppState.Exit;
-                break;
-            default:
-                Console.WriteLine("Invalid choice. Please try again.");
-                Console.ReadLine();
-                break;
-        }
+            },
+            ["6"] = () => TransitionTo(AppState.Exit)
+        });
     }
 
     private static void ShowUserManagementMenu()
     {
-        while (currentState == AppState.UserManagementMenu)
-        {
-            Console.Clear();
-            Console.WriteLine("\n--- User Management ---");
-            Console.WriteLine("1. View all users");
-            Console.WriteLine("2. Add new user");
-            Console.WriteLine("3. Edit user");
-            Console.WriteLine("4. Delete user");
-            Console.WriteLine("5. Back to Main Menu");
-            Console.Write("Enter your choice: ");
-
-            string choice = Console.ReadLine();
-
-            switch (choice)
+        var choice = Helper.ShowMenu(
+            "User Management",
+            new Dictionary<string, string>
             {
-                case "1":
-                    ViewAllUsers();
-                    break;
-                case "2":
-                    AddNewUser();
-                    break;
-                case "3":
-                    EditUser();
-                    break;
-                case "4":
-                    DeleteUser();
-                    break;
-                case "5":
-                    currentState = AppState.MainMenu;
-                    break;
-                default:
-                    Console.WriteLine("Invalid choice. Please try again.");
-                    Console.ReadLine();
-                    break;
-            }
-        }
+                ["1"] = "View all users",
+                ["2"] = "Add new user",
+                ["3"] = "Edit user",
+                ["4"] = "Deactivate user",
+                ["5"] = "Back to Main Menu"
+            });
+
+        Helper.HandleMenuSelection(choice, new Dictionary<string, Action>
+        {
+            ["1"] = () => ViewAllUsers(),
+            ["2"] = () => AddNewUser(),
+            ["3"] = () => EditUser(),
+            ["4"] = () => DeactivateUser(),
+            ["5"] = () => TransitionTo(AppState.MainMenu),
+        });
     }
+
     private static void ViewAllUsers()
     {
-        Console.Clear();
-        Console.WriteLine("\n--- All Users ---");
-        var users = userService.GetAllUsers();
+        //Console.Clear();
+        //Console.WriteLine("\n--- All Users ---");
+        //var users = ((InMemoryUserRepository)(userService).Repository.GetAll();
 
-        if (users.Any())
-        {
-            Console.WriteLine("ID\tName\tEmail\tRole\tJoin Date\tStatus");
-            Console.WriteLine("--------------------------------------------------");
-            foreach (var user in users)
-            {
-                Console.WriteLine($"{user.Id}\t{user.Name}\t{user.Email}\t{user.Role}\t{user.JoinDate.ToShortDateString()}\t{(user.IsActive ? "Active" : "Inactive")}");
-            }
-        }
-        else
-        {
-            Console.WriteLine("No users found.");
-        }
-        Console.WriteLine("\nPress Enter to continue...");
-        Console.ReadLine();
+        //if (users.Any())
+        //{
+        //    Console.WriteLine("ID\tName\tEmail\tRole\tJoin Date\tStatus");
+        //    Console.WriteLine("--------------------------------------------------");
+        //    foreach (var user in users)
+        //    {
+        //        Console.WriteLine($"{user.Id}\t{user.Name}\t{user.Email}\t{user.Role}\t{user.JoinDate.ToShortDateString()}\t{(user.IsActive ? "Active" : "Inactive")}");
+        //    }
+        //}
+        //else
+        //{
+        //    Console.WriteLine("No users found.");
+        //}
+        //Console.WriteLine("\nPress Enter to continue...");
+        //Console.ReadLine();
+
+        Console.WriteLine("WIP");
     }
 
     private static void AddNewUser()
@@ -329,15 +315,15 @@ public class Program
         Console.ReadLine();
     }
 
-    private static void DeleteUser()
+    private static void DeactivateUser()
     {
         Console.Clear();
-        Console.WriteLine("\n--- Delete User ---");
+        Console.WriteLine("\n--- Deactivate User ---");
 
-        Console.Write("Enter User ID to delete: ");
+        Console.Write("Enter User ID to deactivate: ");
         string userId = Console.ReadLine();
 
-        try
+        try 
         {
             var user = userService.GetUserById(userId);
             if (user == null)
@@ -346,27 +332,40 @@ public class Program
                 return;
             }
 
-            Console.WriteLine($"Are you sure you want to {(user.IsActive ? "deactivate" : "activate")} user {user.Name}? (Y/N)");
-            string confirm = Console.ReadLine();
+            Console.WriteLine($"1. {(user.IsActive ? "Deactivate" : "Activate")} user");
+            Console.WriteLine("2. Delete user permanently");
+            Console.WriteLine("3. Cancel");
+            Console.Write("Enter your choice: ");
+            string choice = Console.ReadLine();
 
-            if (confirm.Equals("Y", StringComparison.OrdinalIgnoreCase))
+            switch (choice)
             {
-                if (user.IsActive)
-                {
-                    userService.DeactivateUser(userId);
-                    Console.WriteLine("User deactivated successfully.");
-                }
-                else
-                {
-                    user.IsActive = true;
+                case "1":
+                    user.IsActive = !user.IsActive;
                     userService.UpdateUser(user);
-                    Console.WriteLine("User activated successfully.");
-                }
+                    Console.WriteLine($"User {(user.IsActive ? "activated" : "deactivated")} successfully.");
+                    break;
+                case "2":
+                    Console.Write("Are you sure you want to permanently delete this user? (Y/N): ");
+                    if (Console.ReadLine().Equals("Y", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // In a real application, we would have a Delete method in the service
+                        // For now, we'll just deactivate
+                        user.IsActive = false;
+                        userService.UpdateUser(user);
+                        Console.WriteLine("User deactivated.");
+                    }
+                    break;
+                case "3":
+                    return;
+                default:
+                    Console.WriteLine("Invalid choice.");
+                    break;
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error deleting user: {ex.Message}");
+            Console.WriteLine($"Error deactivating user: {ex.Message}");
         }
 
         Console.WriteLine("Press Enter to continue...");
@@ -375,46 +374,33 @@ public class Program
 
     private static void ShowLeaveRequestMenu()
     {
-        while (currentState == AppState.LeaveRequestMenu)
-        {
-            Console.Clear();
-            Console.WriteLine("\n--- Leave Request Management ---");
-            Console.WriteLine("1. View my leave requests");
-            Console.WriteLine("2. View pending leave requests (for approval)");
-            Console.WriteLine("3. Submit new leave request");
-            Console.WriteLine("4. Back to Main Menu");
-            Console.Write("Enter your choice: ");
-
-            string choice = Console.ReadLine();
-
-            switch (choice)
+        var choice = Helper.ShowMenu(
+            "Leave Request Management",
+            new Dictionary<string, string>
             {
-                case "1":
-                    ViewMyLeaveRequests();
-                    break;
-                case "2":
-                    if (loggedInUser.Role.CanApproveLeave())
-                    {
-                        ViewPendingLeaveRequests();
-                    }
-                    else
-                    {
-                        Console.WriteLine("You don't have permission to approve leave requests.");
-                        Console.ReadLine();
-                    }
-                    break;
-                case "3":
-                    SubmitLeaveRequest();
-                    break;
-                case "4":
-                    currentState = AppState.MainMenu;
-                    break;
-                default:
-                    Console.WriteLine("Invalid choice. Please try again.");
+                ["1"] = "View my leave requests",
+                ["2"] = "View pending leave requests (for approval)",
+                ["3"] = "Submit new leave request",
+                ["4"] = "Back to Main Menu"
+            });
+
+        Helper.HandleMenuSelection(choice, new Dictionary<string, Action>
+        {
+            ["1"] = () => ViewMyLeaveRequests(),
+            ["2"] = () => {
+                if (loggedInUser.Role.CanApproveLeave())
+                {
+                    ViewPendingLeaveRequests();
+                }
+                else
+                {
+                    Console.WriteLine("\nYou don't have permission to approve leave requests.");
                     Console.ReadLine();
-                    break;
-            }
-        }
+                }
+            },
+            ["3"] = () => SubmitLeaveRequest(),
+            ["4"] = () => TransitionTo(AppState.MainMenu)
+        });
     }
     private static void ViewMyLeaveRequests()
     {
@@ -445,7 +431,7 @@ public class Program
     {
         Console.Clear();
         Console.WriteLine("\n--- Pending Leave Requests ---");
-        var requests = leaveService.GetPendingLeaveRequests();
+        var requests = leaveService.GetPendingRequests();
 
         if (requests.Any())
         {
@@ -479,7 +465,9 @@ public class Program
         Console.Write("Enter your choice: ");
         string choice = Console.ReadLine();
 
-        switch (choice)
+        try
+        {
+            switch (choice)
         {
             case "1":
                 leaveService.ApproveRequest(requestId, loggedInUser.Id);
@@ -494,6 +482,11 @@ public class Program
             default:
                 Console.WriteLine("Invalid choice.");
                 break;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error: {ex.Message}");
         }
         Console.ReadLine();
     }
@@ -528,53 +521,42 @@ public class Program
 
     private static void ShowBusinessTripMenu()
     {
-        while (currentState == AppState.BusinessTripMenu)
-        {
-            Console.Clear();
-            Console.WriteLine("\n--- Business Trip Management ---");
-            Console.WriteLine("1. View my business trip requests");
-            Console.WriteLine("2. View pending business trip requests (for approval)");
-            Console.WriteLine("3. Submit new business trip request");
-            Console.WriteLine("4. Back to Main Menu");
-            Console.Write("Enter your choice: ");
-
-            string choice = Console.ReadLine();
-
-            switch (choice)
+        var choice = Helper.ShowMenu(
+            "Business Trip Management",
+            new Dictionary<string, string>
             {
-                case "1":
-                    ViewMyBusinessTrips();
-                    break;
-                case "2":
-                    if (loggedInUser.Role.CanApproveTrips())
-                    {
-                        ViewPendingBusinessTrips();
-                    }
-                    else
-                    {
-                        Console.WriteLine("You don't have permission to approve business trip requests.");
-                        Console.ReadLine();
-                    }
-                    break;
-                case "3":
-                    SubmitBusinessTripRequest();
-                    break;
-                case "4":
-                    currentState = AppState.MainMenu;
-                    break;
-                default:
-                    Console.WriteLine("Invalid choice. Please try again.");
+                ["1"] = "View my business trip requests",
+                ["2"] = "View pending business trip requests (for approval)",
+                ["3"] = "Submit new business trip request",
+                ["4"] = "Update actual trip cost",
+                ["5"] = "Back to Main Menu"
+            });
+
+        Helper.HandleMenuSelection(choice, new Dictionary<string, Action>
+        {
+            ["1"] = () => ViewMyBusinessTrips(),
+            ["2"] = () => {
+                if (loggedInUser.Role.CanApproveTrips())
+                {
+                    ViewPendingBusinessTrips();
+                }
+                else
+                {
+                    Console.WriteLine("\nYou don't have permission to approve business trip requests.");
                     Console.ReadLine();
-                    break;
-            }
-        }
+                }
+            },
+            ["3"] = () => SubmitBusinessTripRequest(),
+            ["4"] = () => UpdateBusinessTripCost(),
+            ["5"] = () => TransitionTo(AppState.MainMenu),
+        });
     }
 
     private static void ViewMyBusinessTrips()
     {
         Console.Clear();
         Console.WriteLine("\n--- My Business Trip Requests ---");
-        var trips = businessTripService.GetBusinessTripByUserId(loggedInUser.Id);
+        var trips = businessTripService.GetByUserId(loggedInUser.Id);
 
         if (trips.Any())
         {
@@ -598,7 +580,7 @@ public class Program
     {
         Console.Clear();
         Console.WriteLine("\n--- Pending Business Trip Requests ---");
-        var trips = businessTripService.GetPendingBusinessTripRequests();
+        var trips = businessTripService.GetPendingRequests();
 
         if (trips.Any())
         {
@@ -629,6 +611,7 @@ public class Program
     {
         Console.WriteLine("\n1. Approve");
         Console.WriteLine("2. Reject");
+        Console.WriteLine("3. Cancel");
         Console.Write("Enter your choice: ");
         string choice = Console.ReadLine();
 
@@ -644,6 +627,8 @@ public class Program
                 businessTripService.RejectRequest(tripId, loggedInUser.Id, reason);
                 Console.WriteLine("Business trip rejected.");
                 break;
+            case "3":
+                return;
             default:
                 Console.WriteLine("Invalid choice.");
                 break;
@@ -687,44 +672,52 @@ public class Program
         Console.ReadLine();
     }
 
+    private static void UpdateBusinessTripCost()
+    {
+        Console.Clear();
+        Console.WriteLine("\n--- Update Business Trip Cost ---");
+
+        try
+        {
+            Console.Write("Enter Trip ID: ");
+            string tripId = Console.ReadLine();
+
+            Console.Write("Enter Actual Cost: ");
+            decimal actualCost = decimal.Parse(Console.ReadLine());
+
+            businessTripService.UpdateActualCost(tripId, actualCost);
+            Console.WriteLine("Business trip cost updated successfully.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error updating business trip cost: {ex.Message}");
+        }
+
+        Console.WriteLine("Press Enter to continue...");
+        Console.ReadLine();
+    }
+
     private static void ShowPayrollReportMenu()
     {
-        while (currentState == AppState.PayrollReportMenu)
-        {
-            Console.Clear();
-            Console.WriteLine("\n--- Payroll Report ---");
-            Console.WriteLine("1. View payroll by user");
-            Console.WriteLine("2. View payroll by period");
-            Console.WriteLine("3. Generate payroll for user");
-            Console.WriteLine("4. Mark payroll as paid");
-            Console.WriteLine("5. Back to Main Menu");
-            Console.Write("Enter your choice: ");
-
-            string choice = Console.ReadLine();
-
-            switch (choice)
+        var choice = Helper.ShowMenu(
+            "Payroll Report",
+            new Dictionary<string, string>
             {
-                case "1":
-                    ViewPayrollByUser();
-                    break;
-                case "2":
-                    ViewPayrollByPeriod();
-                    break;
-                case "3":
-                    GeneratePayroll();
-                    break;
-                case "4":
-                    MarkPayrollAsPaid();
-                    break;
-                case "5":
-                    currentState = AppState.MainMenu;
-                    break;
-                default:
-                    Console.WriteLine("Invalid choice. Please try again.");
-                    Console.ReadLine();
-                    break;
-            }
-        }
+                ["1"] = "View payroll by user",
+                ["2"] = "View payroll by period",
+                ["3"] = "Generate payroll for user",
+                ["4"] = "Mark payroll as paid",
+                ["5"] = "Back to Main Menu"
+            });
+
+        Helper.HandleMenuSelection(choice, new Dictionary<string, Action>
+        {
+            ["1"] = () => ViewPayrollByUser(),
+            ["2"] = () => ViewPayrollByPeriod(),
+            ["3"] = () => GeneratePayroll(),
+            ["4"] = () => MarkPayrollAsPaid(),
+            ["5"] = () => TransitionTo(AppState.MainMenu),
+        });
     }
     private static void ViewPayrollByUser()
     {
@@ -738,11 +731,11 @@ public class Program
 
         if (string.IsNullOrEmpty(userId))
         {
-            payrolls = payrollService.GetPayrollByPeriod(DateTime.Now.AddMonths(-6), DateTime.Now);
+            payrolls = payrollService.GetByPeriod(DateTime.Now.AddMonths(-6), DateTime.Now);
         }
         else
         {
-            payrolls = payrollService.GetUserPayrolls(userId);
+            payrolls = payrollService.GetByUserId(userId);
         }
 
         if (payrolls.Any())
@@ -775,7 +768,7 @@ public class Program
         Console.Write("End Date (yyyy-mm-dd): ");
         DateTime endDate = DateTime.Parse(Console.ReadLine());
 
-        var payrolls = payrollService.GetPayrollByPeriod(startDate, endDate);
+        var payrolls = payrollService.GetByPeriod(startDate, endDate);
 
         if (payrolls.Any())
         {
@@ -851,81 +844,32 @@ public class Program
     }
 }
 
-// Mock implementations of the repositories for demonstration purposes
-public class MockUserRepository : IUserService
+public static class Helper
 {
-    private readonly List<User> _users = new List<User>();
-
-    public User GetUserById(string id) => _users.FirstOrDefault(u => u.Id == id);
-    public IEnumerable<User> GetAllUsers() => _users;
-    public void AddUser(User user) => _users.Add(user);
-    public void UpdateUser(User user)
+    public static string ShowMenu(string title, Dictionary<string, string> options)
     {
-        var existing = _users.FirstOrDefault(u => u.Id == user.Id);
-        if (existing != null)
+        Console.Clear();
+        Console.WriteLine($"\n--- {title} ---");
+        foreach (var option in options)
         {
-            _users.Remove(existing);
-            _users.Add(user);
+            Console.WriteLine($"{option.Key}. {option.Value}");
         }
+        Console.Write("Enter your choice: ");
+        return Console.ReadLine();
     }
-    public void DeleteUser(string id) => _users.RemoveAll(u => u.Id == id);
-    public bool Exists(string email) => _users.Any(u => u.Email == email);
-}
 
-public class MockLeaveRequestRepository : ILeaveRequestRepository
-{
-    private readonly List<LeaveRequest> _requests = new List<LeaveRequest>();
-
-    public LeaveRequest GetLeaveById(string id) => _requests.FirstOrDefault(r => r.Id == id);
-    public IEnumerable<LeaveRequest> GetByUserId(string userId) => _requests.Where(r => r.UserId == userId);
-    public IEnumerable<LeaveRequest> GetPendingLeaveRequests() => _requests.Where(r => r.Status == RequestStatus.Pending);
-    public void AddPendingRequest(LeaveRequest request) => _requests.Add(request);
-    public void UpdatePendingRequest(LeaveRequest request)
+    public static void HandleMenuSelection(
+        string choice,
+        Dictionary<string, Action> handlers)
     {
-        var existing = _requests.FirstOrDefault(r => r.Id == request.Id);
-        if (existing != null)
+        if (handlers.TryGetValue(choice, out var handle))
         {
-            _requests.Remove(existing);
-            _requests.Add(request);
+            handle();
         }
-    }
-}
-
-public class MockBusinessTripRepository : IBusinessTripRepository
-{
-    private readonly List<BusinessTrip> _trips = new List<BusinessTrip>();
-
-    public BusinessTrip GetBusinessTripById(string id) => _trips.FirstOrDefault(t => t.Id == id);
-    public IEnumerable<BusinessTrip> GetBusinessTripByUserId(string userId) => _trips.Where(t => t.UserId == userId);
-    public IEnumerable<BusinessTrip> GetPendingBusinessRequest() => _trips.Where(t => t.Status == RequestStatus.Pending);
-    public void Add(BusinessTrip businessTrip) => _trips.Add(businessTrip);
-    public void Update(BusinessTrip businessTrip)
-    {
-        var existing = _trips.FirstOrDefault(t => t.Id == businessTrip.Id);
-        if (existing != null)
+        else
         {
-            _trips.Remove(existing);
-            _trips.Add(businessTrip);
-        }
-    }
-}
-
-public class MockPayrollRepository : IPayrollRepository
-{
-    private readonly List<Payroll> _payrolls = new List<Payroll>();
-
-    public Payroll GetPayrollById(string id) => _payrolls.FirstOrDefault(p => p.Id == id);
-    public IEnumerable<Payroll> GetPayrollByUserId(string userId) => _payrolls.Where(p => p.UserId == userId);
-    public IEnumerable<Payroll> GetPayrollByPeriod(DateTime start, DateTime end) =>
-        _payrolls.Where(p => p.PeriodStart >= start && p.PeriodEnd <= end);
-    public void Add(Payroll payroll) => _payrolls.Add(payroll);
-    public void Update(Payroll payroll)
-    {
-        var existing = _payrolls.FirstOrDefault(p => p.Id == payroll.Id);
-        if (existing != null)
-        {
-            _payrolls.Remove(existing);
-            _payrolls.Add(payroll);
+            Console.WriteLine("Invalid choice. Please try again.");
+            Console.ReadLine();
         }
     }
 }
