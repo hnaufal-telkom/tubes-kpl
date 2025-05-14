@@ -10,7 +10,7 @@
     "Allowances": {
       "Meal": 2000000,
       "TravelAllowance": 3000000
-    }
+    },
     "PaymentSchedule": "5days"
   }
 }
