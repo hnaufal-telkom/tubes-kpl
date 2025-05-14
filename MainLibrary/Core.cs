@@ -85,7 +85,7 @@ namespace MainLibrary
     {
         User Register(string name, string email, string password, Role role);
         User? Authenticate(string email, string password);
-        User GetAllUser();
+        User? GetAllUser();
         User GetUserById(string userId);
         void UpdateUserDetails(string userId, string name, string email);
         void ChangePassword(string userId, string currentPassword, string newPassword);
@@ -548,7 +548,7 @@ namespace MainLibrary
             }
         }
 
-        public User GetAllUser()
+        public User? GetAllUser()
         {
             _logger.Debug("Getting all active users");
             return _repository.GetAll().FirstOrDefault(u => u.IsActive);
