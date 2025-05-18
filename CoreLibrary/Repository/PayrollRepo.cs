@@ -10,12 +10,17 @@ namespace CoreLibrary.Repository
         private readonly object _lock = new();
         private readonly ILogger _logger;
 
+        public InMemoryPayrollRepository(ILogger logger)
+        {
+            _logger = logger.ForContext<InMemoryPayrollRepository>();
+        }
+
         public IEnumerable<Payroll> GetAll()
         {
             lock (_lock)
             {
-                _logger.Information($"Getting all business trip");
-                return _payrolls.ToList();
+                _logger.Debug("Retrieving all payrolls");
+                return new List<Payroll>(_payrolls);
             }
         }
 
@@ -23,14 +28,8 @@ namespace CoreLibrary.Repository
         {
             lock (_lock)
             {
-                _logger.Information($"Getting business trip by ID: {id}");
-                var payroll = _payrolls.FirstOrDefault(p => p.Id == id);
-                if (payroll == null)
-                {
-                    _logger.Warning($"Business trip with ID {id} not found");
-                    throw new KeyNotFoundException("Business trip not found");
-                }
-                return payroll;
+                _logger.Debug("Retrieving payroll by ID: {PayrollId}", id);
+                return FindPayroll(p => p.Id == id) ?? throw PayrollNotFound(id);
             }
         }
 
@@ -38,8 +37,10 @@ namespace CoreLibrary.Repository
         {
             lock (_lock)
             {
-                Log.Information($"Getting payrolls between {start} and {end}");
-                return _payrolls.Where(p => p.PeriodStart >= start && p.PeriodEnd <= end).ToList();
+                _logger.Debug("Retrieving payrolls between {StartDate} and {EndDate}",
+                    start.ToString("yyyy-MM-dd"), end.ToString("yyyy-MM-dd"));
+                return _payrolls.Where(p =>
+                    p.PeriodStart >= start && p.PeriodEnd <= end).ToList();
             }
         }
 
@@ -47,9 +48,10 @@ namespace CoreLibrary.Repository
         {
             lock (_lock)
             {
-                Log.Information($"Adding payroll for user ID: {payroll.UserId}");
+                _logger.Information("Adding payroll for user ID: {UserId}", payroll.UserId);
+                payroll.Id = GenerateId();
                 _payrolls.Add(payroll);
-                Log.Information($"Payroll for user ID {payroll.UserId} added successfully");
+                _logger.Information("Payroll added successfully with ID: {PayrollId}", payroll.Id);
             }
         }
 
@@ -57,18 +59,17 @@ namespace CoreLibrary.Repository
         {
             lock (_lock)
             {
-                Log.Information($"Updating payroll for user ID: {payroll.UserId}");
+                _logger.Information("Updating payroll ID: {PayrollId}", payroll.Id);
+
                 var index = _payrolls.FindIndex(p => p.Id == payroll.Id);
-                if (index >= 0)
+                if (index < 0)
                 {
-                    _payrolls[index] = payroll;
-                    Log.Information($"Payroll for user ID {payroll.UserId} updated successfully");
+                    _logger.Warning("Payroll ID: {PayrollId} not found for update", payroll.Id);
+                    throw PayrollNotFound(payroll.Id);
                 }
-                else
-                {
-                    Log.Warning($"Payroll with ID {payroll.Id} not found for update");
-                    throw new KeyNotFoundException("Payroll not found");
-                }
+
+                _payrolls[index] = payroll;
+                _logger.Information("Payroll ID: {PayrollId} updated successfully", payroll.Id);
             }
         }
 
@@ -76,18 +77,40 @@ namespace CoreLibrary.Repository
         {
             lock (_lock)
             {
-                _logger.Information($"Deleting payroll with ID: {id}");
+                _logger.Information("Deleting payroll ID: {PayrollId}", id);
+
                 var count = _payrolls.RemoveAll(p => p.Id == id);
-                if (count > 0)
+                if (count == 0)
                 {
-                    _logger.Warning($"Payroll with ID {id} not found for deletion");
-                    throw new KeyNotFoundException("Payroll not found");
+                    _logger.Warning("Payroll ID: {PayrollId} not found for deletion", id);
+                    throw PayrollNotFound(id);
                 }
-                else
-                {
-                    _logger.Information($"Payroll with ID {id} deleted successfully");
-                }
+
+                _logger.Information("Payroll ID: {PayrollId} deleted successfully", id);
             }
         }
+
+        public int GenerateId()
+        {
+            lock (_lock)
+            {
+                _logger.Debug("Generating new payroll ID");
+                return _payrolls.Count == 0 ? 1 : _payrolls.Max(p => p.Id) + 1;
+            }
+        }
+
+        #region Private Helper Methods
+
+        private Payroll? FindPayroll(Func<Payroll, bool> predicate)
+        {
+            return _payrolls.FirstOrDefault(predicate);
+        }
+
+        private KeyNotFoundException PayrollNotFound(int id)
+        {
+            return new KeyNotFoundException($"Payroll with ID {id} not found");
+        }
+
+        #endregion
     }
 }

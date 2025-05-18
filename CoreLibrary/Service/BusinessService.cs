@@ -14,160 +14,61 @@ namespace CoreLibrary.Service
         {
             _repository = repository;
             _userRepository = userRepository;
-            _logger = logger;
+            _logger = logger.ForContext<BusinessTripService>();
         }
 
         public BusinessTrip SubmitRequest(int userId, string destination, DateTime startDate, DateTime endDate, string purpose, decimal estimateCost)
         {
-            try
-            {
-                _logger.Information($"Submitting business trip request for user ID: {userId}");
-                
-                if (startDate < DateTime.Now || endDate < startDate)
-                {
-                    _logger.Error("Invalid date range");
-                    throw new ArgumentException("Invalid date range");
-                }
+            _logger.Information("Submitting business trip request for user ID: {UserId}", userId);
 
-                if (estimateCost < 0)
-                {
-                    _logger.Error("Estimated cost cannot be negative");
-                    throw new ArgumentException("Estimated cost cannot be negative");
-                }
+            ValidateTripDates(startDate, endDate);
+            ValidateCost(estimateCost);
 
-                var user = _userRepository.GetById(userId);
-                if (user == null)
-                {
-                    _logger.Warning($"User with ID {userId} not found");
-                    throw new KeyNotFoundException("User not found");
-                }
+            var user = GetUser(userId);
 
-                var allUsers = _repository.GetAll().ToList();
-                int newId = 0;
-                while (allUsers.Any(u => u.Id == newId))
-                {
-                    newId++;
-                }
+            var trip = CreateBusinessTrip(userId, destination, startDate, endDate, purpose, estimateCost);
 
-                var trip = new BusinessTrip
-                {
-                    Id = newId,
-                    UserId = userId,
-                    Destination = destination,
-                    StartDate = startDate,
-                    EndDate = endDate,
-                    Purpose = purpose,
-                    EstimatedCost = estimateCost,
-                    RequestDate = DateTime.Now,
-                    Status = RequestStatus.Pending
-                };
-                _repository.Add(trip);
-                _logger.Information($"Business trip request submitted successfully for user ID: {userId}");
-                return trip;
-            }
-            catch (KeyNotFoundException)
-            {
-                _logger.Error("User not found");
-                throw new KeyNotFoundException("User not found");
-            }
-            catch (ArgumentException)
-            {
-                _logger.Error("Invalid Request");
-                throw new ArgumentException("Invalid Request");
-            }
+            _repository.Add(trip);
+            _logger.Information("Business trip request submitted successfully for user ID: {UserId}", userId);
+
+            return trip;
         }
 
         public void ApproveRequest(int tripId, int approverId)
         {
-            try
-            {
-                _logger.Information($"Approving business trip request ID: {tripId} by approver ID: {approverId}");
-                var trip = _repository.GetById(tripId);
-                if (trip == null)
-                {
-                    _logger.Warning($"Business trip with ID {tripId} not found");
-                    throw new KeyNotFoundException("Business trip not found");
-                }
-                var approver = _userRepository.GetById(approverId);
-                if (RoleExtensions.CanApproveTrips(approver.Role) || RoleExtensions.CanManageSystem(approver.Role))
-                {
-                    _logger.Warning($"Approver with ID {approverId} not found or not an admin");
-                    throw new KeyNotFoundException("Approver not found or not an admin");
-                }
-                trip.Status = RequestStatus.Approved;
-                trip.ApproverId = approverId;
-                trip.ApprovalDate = DateTime.Now;
-                _repository.Update(trip);
-                _logger.Information($"Business trip request ID: {tripId} approved successfully by approver ID: {approverId}");
-            }
-            catch (KeyNotFoundException)
-            {
-                _logger.Error("Business trip or approver not found");
-                throw new KeyNotFoundException("Business trip or approver not found");
-            }
+            _logger.Information("Approving business trip request ID: {TripId} by approver ID: {ApproverId}", tripId, approverId);
+
+            var trip = GetTrip(tripId);
+            var approver = ValidateApprover(approverId);
+
+            UpdateTripStatus(trip, RequestStatus.Approved, approverId);
+
+            _logger.Information("Business trip request ID: {TripId} approved successfully by approver ID: {ApproverId}", tripId, approverId);
         }
 
         public void RejectRequest(int tripId, int approverId, string reason)
         {
-            try
-            {
-                _logger.Information($"Rejecting business trip request ID: {tripId} by approver ID: {approverId}");
-                var trip = _repository.GetById(tripId);
-                if (trip == null)
-                {
-                    _logger.Warning($"Business trip with ID {tripId} not found");
-                    throw new KeyNotFoundException("Business trip not found");
-                }
-                var approver = _userRepository.GetById(approverId);
-                if (RoleExtensions.CanApproveTrips(approver.Role) || RoleExtensions.CanManageSystem(approver.Role))
-                {
-                    _logger.Warning($"Approver with ID {approverId} not found or not an admin");
-                    throw new KeyNotFoundException("Approver not found or not an admin");
-                }
-                trip.Status = RequestStatus.Rejected;
-                trip.ApproverId = approverId;
-                trip.RejectionReason = reason;
-                trip.ApprovalDate = DateTime.Now;
-                _repository.Update(trip);
-                _logger.Information($"Business trip request ID: {tripId} rejected successfully by approver ID: {approverId}");
-            }
-            catch (KeyNotFoundException)
-            {
-                _logger.Error("Business trip or approver not found");
-                throw new KeyNotFoundException("Business trip or approver not found");
-            }
+            _logger.Information("Rejecting business trip request ID: {TripId} by approver ID: {ApproverId}", tripId, approverId);
+
+            var trip = GetTrip(tripId);
+            var approver = ValidateApprover(approverId);
+
+            UpdateTripStatus(trip, RequestStatus.Rejected, approverId, reason);
+
+            _logger.Information("Business trip request ID: {TripId} rejected successfully by approver ID: {ApproverId}", tripId, approverId);
         }
 
         public void UpdateActualCost(int tripId, decimal actualCost)
         {
-            try
-            {
-                _logger.Information($"Updating actual cost for business trip ID: {tripId}");
-                var trip = _repository.GetById(tripId);
-                if (trip == null)
-                {
-                    _logger.Warning($"Business trip with ID {tripId} not found");
-                    throw new KeyNotFoundException("Business trip not found");
-                }
-                if (actualCost < 0)
-                {
-                    _logger.Error("Actual cost cannot be negative");
-                    throw new ArgumentException("Actual cost cannot be negative");
-                }
-                trip.ActualCost = actualCost;
-                _repository.Update(trip);
-                _logger.Information($"Actual cost updated successfully for business trip ID: {tripId}");
-            }
-            catch (KeyNotFoundException)
-            {
-                _logger.Error("Business trip not found");
-                throw new KeyNotFoundException("Business trip not found");
-            }
-            catch (ArgumentException)
-            {
-                _logger.Error("Invalid Request");
-                throw new ArgumentException("Invalid Request");
-            }
+            _logger.Information("Updating actual cost for business trip ID: {TripId}", tripId);
+
+            var trip = GetTrip(tripId);
+            ValidateCost(actualCost);
+
+            trip.ActualCost = actualCost;
+            _repository.Update(trip);
+
+            _logger.Information("Actual cost updated successfully for business trip ID: {TripId}", tripId);
         }
 
         public IEnumerable<BusinessTrip> GetAllTrips()
@@ -182,28 +83,116 @@ namespace CoreLibrary.Service
             return _repository.GetPendingRequests();
         }
 
-        public BusinessTrip GetTripById(int tripId)
-        {
-            _logger.Information($"Getting business trip by ID: {tripId}");
-            var trip = _repository.GetById(tripId);
-            if (trip == null)
-            {
-                _logger.Warning($"Business trip with ID {tripId} not found");
-                throw new KeyNotFoundException("Business trip not found");
-            }
-            return trip;
-        }
+        public BusinessTrip GetTripById(int tripId) => GetTrip(tripId);
 
         public IEnumerable<BusinessTrip> GetByUserId(int userId)
         {
-            _logger.Information($"Getting business trips by user ID: {userId}");
+            _logger.Information("Getting business trips by user ID: {UserId}", userId);
+
             var trips = _repository.GetByUserId(userId);
-            if (trips == null || !trips.Any())
+
+            if (!trips.Any())
             {
-                _logger.Warning($"No business trips found for user ID {userId}");
+                _logger.Warning("No business trips found for user ID: {UserId}", userId);
                 throw new KeyNotFoundException("No business trips found for this user");
             }
+
             return trips;
         }
+
+        #region Private Helper Methods
+
+        private void ValidateTripDates(DateTime startDate, DateTime endDate)
+        {
+            if (startDate < DateTime.Today)
+            {
+                _logger.Error("Start date cannot be in the past");
+                throw new ArgumentException("Start date cannot be in the past");
+            }
+
+            if (endDate < startDate)
+            {
+                _logger.Error("End date cannot be before start date");
+                throw new ArgumentException("End date cannot be before start date");
+            }
+        }
+
+        private void ValidateCost(decimal cost)
+        {
+            if (cost < 0)
+            {
+                _logger.Error("Cost cannot be negative: {Cost}", cost);
+                throw new ArgumentException("Cost cannot be negative");
+            }
+        }
+
+        private User GetUser(int userId)
+        {
+            var user = _userRepository.GetById(userId);
+
+            if (user == null)
+            {
+                _logger.Warning("User with ID: {UserId} not found", userId);
+                throw new KeyNotFoundException("User not found");
+            }
+
+            return user;
+        }
+
+        private BusinessTrip CreateBusinessTrip(int userId, string destination, DateTime startDate, DateTime endDate, string purpose, decimal estimateCost) =>
+            new BusinessTrip
+            {
+                Id = _repository.GenerateId(),
+                UserId = userId,
+                Destination = destination,
+                StartDate = startDate,
+                EndDate = endDate,
+                Purpose = purpose,
+                EstimatedCost = estimateCost,
+                RequestDate = DateTime.Now,
+                Status = RequestStatus.Pending
+            };
+
+        private BusinessTrip GetTrip(int tripId)
+        {
+            var trip = _repository.GetById(tripId);
+
+            if (trip == null)
+            {
+                _logger.Warning("Business trip with ID: {TripId} not found", tripId);
+                throw new KeyNotFoundException("Business trip not found");
+            }
+
+            return trip;
+        }
+
+        private User ValidateApprover(int approverId)
+        {
+            var approver = _userRepository.GetById(approverId);
+
+            if (!RoleExtensions.CanApproveTrips(approver.Role))
+            {
+                _logger.Warning("Approver with ID: {ApproverId} is not authorized", approverId);
+                throw new UnauthorizedAccessException("Approver not authorized");
+            }
+
+            return approver;
+        }
+
+        private void UpdateTripStatus(BusinessTrip trip, RequestStatus status, int approverId, string rejectionReason = null)
+        {
+            trip.Status = status;
+            trip.ApproverId = approverId;
+            trip.ApprovalDate = DateTime.Now;
+
+            if (status == RequestStatus.Rejected)
+            {
+                trip.RejectionReason = rejectionReason;
+            }
+
+            _repository.Update(trip);
+        }
+
+        #endregion
     }
 }

@@ -10,12 +10,17 @@ namespace CoreLibrary.Repository
         private readonly object _lock = new();
         private readonly ILogger _logger;
 
+        public InMemoryBusinessTripRepository(ILogger logger)
+        {
+            _logger = logger.ForContext<InMemoryBusinessTripRepository>();
+        }
+
         public IEnumerable<BusinessTrip> GetAll()
         {
             lock (_lock)
             {
-                _logger.Information($"Getting all business trip");
-                return _trips.ToList();
+                _logger.Debug("Retrieving all business trips");
+                return new List<BusinessTrip>(_trips);
             }
         }
 
@@ -23,14 +28,8 @@ namespace CoreLibrary.Repository
         {
             lock (_lock)
             {
-                _logger.Information($"Getting business trip by ID: {id}");
-                var trip = _trips.FirstOrDefault(t => t.Id == id);
-                if ( trip == null )
-                {
-                    _logger.Warning($"Business trip with ID {id} not found");
-                    throw new KeyNotFoundException("Business trip not found");
-                }
-                return trip;
+                _logger.Debug("Retrieving business trip by ID: {TripId}", id);
+                return FindTrip(t => t.Id == id) ?? throw TripNotFound(id);
             }
         }
 
@@ -38,13 +37,15 @@ namespace CoreLibrary.Repository
         {
             lock (_lock)
             {
-                _logger.Information($"Getting business trip by user ID: {userId}");
+                _logger.Debug("Retrieving business trips for user ID: {UserId}", userId);
                 var trips = _trips.Where(t => t.UserId == userId).ToList();
+
                 if (trips.Count == 0)
                 {
-                    _logger.Warning($"No business trips found for user ID {userId}");
-                    throw new KeyNotFoundException("No business trips found for this user");
+                    _logger.Warning("No business trips found for user ID: {UserId}", userId);
+                    throw TripNotFound(userId);
                 }
+
                 return trips;
             }
         }
@@ -53,7 +54,7 @@ namespace CoreLibrary.Repository
         {
             lock (_lock)
             {
-                _logger.Information("Getting all pending business trip requests");
+                _logger.Debug("Retrieving pending business trip requests");
                 return _trips.Where(t => t.Status == RequestStatus.Pending).ToList();
             }
         }
@@ -62,9 +63,10 @@ namespace CoreLibrary.Repository
         {
             lock (_lock)
             {
-                _logger.Information($"Adding business trip for user ID: {trip.UserId}");
+                _logger.Information("Adding business trip for user ID: {UserId}", trip.UserId);
+                trip.Id = GenerateId();
                 _trips.Add(trip);
-                _logger.Information($"Business trip for user ID {trip.UserId} added successfully");
+                _logger.Information("Business trip added successfully with ID: {TripId}", trip.Id);
             }
         }
 
@@ -72,18 +74,17 @@ namespace CoreLibrary.Repository
         {
             lock (_lock)
             {
-                _logger.Information($"Updating business trip for user ID: {trip.UserId}");
+                _logger.Information("Updating business trip ID: {TripId}", trip.Id);
+
                 var index = _trips.FindIndex(t => t.Id == trip.Id);
-                if ( index >= 0)
+                if (index < 0)
                 {
-                    _trips[index] = trip;
-                    _logger.Information($"Business trip for user ID {trip.UserId} updated successfully");
+                    _logger.Warning("Business trip ID: {TripId} not found for update", trip.Id);
+                    throw TripNotFound(trip.Id);
                 }
-                else
-                {
-                    _logger.Warning($"Business trip with ID {trip.Id} not found for update");
-                    throw new KeyNotFoundException("Business trip not found");
-                }
+
+                _trips[index] = trip;
+                _logger.Information("Business trip ID: {TripId} updated successfully", trip.Id);
             }
         }
 
@@ -91,18 +92,40 @@ namespace CoreLibrary.Repository
         {
             lock (_lock)
             {
-                _logger.Information($"Deleting Business trip with ID: {id}");
+                _logger.Information("Deleting business trip ID: {TripId}", id);
+
                 var count = _trips.RemoveAll(t => t.Id == id);
-                if (count > 0)
+                if (count == 0)
                 {
-                    _logger.Warning($"Business trip with ID {id} not found for deletion");
-                    throw new KeyNotFoundException("Business trip not found");
+                    _logger.Warning("Business trip ID: {TripId} not found for deletion", id);
+                    throw TripNotFound(id);
                 }
-                else
-                {
-                    _logger.Information($"Business trip with ID {id} deleted successfully");
-                }
+
+                _logger.Information("Business trip ID: {TripId} deleted successfully", id);
             }
         }
+
+        public int GenerateId()
+        {
+            lock (_lock)
+            {
+                _logger.Debug("Generating new business trip ID");
+                return _trips.Count == 0 ? 1 : _trips.Max(t => t.Id) + 1;
+            }
+        }
+
+        #region Private Helper Methods
+
+        private BusinessTrip? FindTrip(Func<BusinessTrip, bool> predicate)
+        {
+            return _trips.FirstOrDefault(predicate);
+        }
+
+        private KeyNotFoundException TripNotFound(int id)
+        {
+            return new KeyNotFoundException($"Business trip with ID {id} not found");
+        }
+
+        #endregion
     }
 }

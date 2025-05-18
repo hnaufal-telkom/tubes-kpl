@@ -10,6 +10,7 @@ namespace CoreLibrary.InterfaceLib
         void Add(Payroll payroll);
         void Update(Payroll payroll);
         void Delete(int id);
+        int GenerateId();
     }
 
     public interface IPayrollService

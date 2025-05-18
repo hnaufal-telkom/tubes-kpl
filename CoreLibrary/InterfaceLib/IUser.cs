@@ -11,6 +11,7 @@ namespace CoreLibrary.InterfaceLib
         void Update(User user);
         void Delete(int id);
         bool EmailCheck(string email);
+        int GenerateId();
     }
 
     public interface IUserService

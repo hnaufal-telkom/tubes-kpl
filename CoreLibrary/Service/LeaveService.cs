@@ -14,135 +14,52 @@ namespace CoreLibrary.Service
         {
             _leaveRepository = leaveRepository;
             _userService = userService;
-            _logger = logger;
+            _logger = logger.ForContext<LeaveService>();
         }
 
         public LeaveRequest SubmitRequest(int userId, DateTime startDate, DateTime endDate, string description)
         {
-            try
-            {
-                _logger.Information("Submitting leave request for user {UserId}", userId);
-                if (startDate < DateTime.Now)
-                {
-                    _logger.Error("Start date cannot be in the past");
-                    throw new ArgumentException("Start date cannot be in the past");
-                }
-                if (startDate > endDate)
-                {
-                    _logger.Error("Start date cannot be after end date");
-                    throw new ArgumentException("Start date cannot be after end date");
-                }
+            _logger.Information("Submitting leave request for user {UserId}", userId);
 
-                var user = _userService.GetUserById(userId);
-                var duration = (endDate - startDate).Days + 1;
+            ValidateLeaveDates(startDate, endDate);
 
-                if (user.RemainingLeaveDays < duration)
-                {
-                    _logger.Error("User does not have enough leave days");
-                    throw new ArgumentException("User does not have enough leave days P");
-                }
+            var user = _userService.GetUserById(userId);
+            var duration = CalculateDuration(startDate, endDate);
 
-                var allUsers = _leaveRepository.GetAll().ToList();
-                int newId = 0;
-                while (allUsers.Any(u => u.Id == newId))
-                {
-                    newId++;
-                }
+            ValidateAvailableLeaveDays(user, duration);
 
-                var request = new LeaveRequest
-                {
-                    Id = newId,
-                    UserId = userId,
-                    StartDate = startDate,
-                    EndDate = endDate,
-                    Description = description,
-                    Status = RequestStatus.Pending,
-                    RequestDate = DateTime.Now,
-                };
+            var request = CreateLeaveRequest(userId, startDate, endDate, description);
 
-                _leaveRepository.Add(request);
-                _userService.UpdateUser(user);
-                _logger.Information("Leave request submitted successfully for user {UserId}", userId);
-                return request;
-            }
-            catch (KeyNotFoundException)
-            {
-                _logger.Error("User not found");
-                throw new KeyNotFoundException("User not found");
-            }
-            catch (ArgumentException)
-            {
-                _logger.Error("Invalid Request");
-                throw new ArgumentException("Invalid Request");
-            }
+            _leaveRepository.Add(request);
+            _logger.Information("Leave request submitted successfully for user {UserId}", userId);
+
+            return request;
         }
 
-        public void ApproveRequest(int userId, int approverId)
+        public void ApproveRequest(int requestId, int approverId)
         {
-            try
-            {
-                _logger.Information("Approving leave request {RequestId} by approver {ApproverId}", userId, approverId);
-                var approver = _userService.GetUserById(approverId);
-                if (RoleExtensions.CanApproveLeave(approver.Role) || RoleExtensions.CanManageSystem(approver.Role))
-                {
-                    _logger.Error("User is not an approver");
-                    throw new InvalidOperationException("User is not an approver");
-                }
+            _logger.Information("Approving leave request {RequestId} by approver {ApproverId}", requestId, approverId);
 
-                var request = _leaveRepository.GetById(userId);
-                if (request.Status != RequestStatus.Pending)
-                {
-                    _logger.Error("Leave request is not pending");
-                    throw new InvalidOperationException("Leave request is not pending");
-                }
+            var approver = ValidateApprover(approverId);
+            var request = GetAndValidatePendingRequest(requestId);
+            var user = _userService.GetUserById(request.UserId);
 
-                var user = _userService.GetUserById(userId);
-                var duration = request.Duration;
-                user.RemainingLeaveDays -= duration;
+            UpdateLeaveRequestStatus(request, RequestStatus.Approved, approverId);
+            DeductLeaveDays(user, request.Duration);
 
-                request.Status = RequestStatus.Approved;
-                request.ApproverId = approverId;
-                request.ApprovalDate = DateTime.Now;
-
-                _userService.UpdateUser(user);
-                _leaveRepository.Update(request);
-                _logger.Information("Leave request approved successfully by approver {ApproverId}", approverId);
-            }
-            catch (KeyNotFoundException)
-            {
-                _logger.Error("Leave request not found");
-                throw new KeyNotFoundException("Leave request not found");
-            }
+            _logger.Information("Leave request approved successfully by approver {ApproverId}", approverId);
         }
 
         public void RejectRequest(int requestId, int approverId, string reason)
         {
-            try
-            {
-                _logger.Information("Rejecting leave request {RequestId} by approver {ApproverId}", requestId, approverId);
-                var approver = _userService.GetUserById(approverId);
-                if (RoleExtensions.CanApproveLeave(approver.Role) || RoleExtensions.CanManageSystem(approver.Role))
-                {
-                    _logger.Error("User is not an approver");
-                    throw new InvalidOperationException("User is not an approver");
-                }
-                var request = _leaveRepository.GetById(requestId);
-                if (request.Status != RequestStatus.Pending)
-                {
-                    _logger.Error("Leave request is not pending");
-                    throw new InvalidOperationException("Leave request is not pending");
-                }
-                request.Status = RequestStatus.Rejected;
-                request.RejectionReason = reason;
-                request.ApprovalDate = DateTime.Now;
-                _leaveRepository.Update(request);
-                _logger.Information("Leave request rejected successfully by approver {ApproverId}", approverId);
-            }
-            catch (KeyNotFoundException)
-            {
-                _logger.Error("Leave request not found");
-                throw new KeyNotFoundException("Leave request not found");
-            }
+            _logger.Information("Rejecting leave request {RequestId} by approver {ApproverId}", requestId, approverId);
+
+            ValidateApprover(approverId);
+            var request = GetAndValidatePendingRequest(requestId);
+
+            UpdateLeaveRequestStatus(request, RequestStatus.Rejected, approverId, reason);
+
+            _logger.Information("Leave request rejected successfully by approver {ApproverId}", approverId);
         }
 
         public IEnumerable<LeaveRequest> GetAllRequests()
@@ -157,16 +74,101 @@ namespace CoreLibrary.Service
             return _leaveRepository.GetPendingRequests();
         }
 
-        public LeaveRequest GetById(int requestId)
-        {
-            _logger.Information("Getting leave request by ID {RequestId}", requestId);
-            return _leaveRepository.GetById(requestId);
-        }
+        public LeaveRequest GetById(int requestId) => _leaveRepository.GetById(requestId);
 
         public IEnumerable<LeaveRequest> GetByUserId(int userId)
         {
             _logger.Information("Getting leave requests for user {UserId}", userId);
             return _leaveRepository.GetByUserId(userId);
         }
+
+        #region Private Helper Methods
+
+        private void ValidateLeaveDates(DateTime startDate, DateTime endDate)
+        {
+            if (startDate < DateTime.Today)
+            {
+                _logger.Error("Start date cannot be in the past");
+                throw new ArgumentException("Start date cannot be in the past");
+            }
+
+            if (startDate > endDate)
+            {
+                _logger.Error("Start date cannot be after end date");
+                throw new ArgumentException("Start date cannot be after end date");
+            }
+        }
+
+        private int CalculateDuration(DateTime startDate, DateTime endDate) =>
+            (endDate - startDate).Days + 1;
+
+        private void ValidateAvailableLeaveDays(User user, int duration)
+        {
+            if (user.RemainingLeaveDays < duration)
+            {
+                _logger.Error("User does not have enough leave days");
+                throw new ArgumentException("User does not have enough leave days");
+            }
+        }
+
+        private LeaveRequest CreateLeaveRequest(int userId, DateTime startDate, DateTime endDate, string description) =>
+            new LeaveRequest
+            {
+                Id = _leaveRepository.GenerateId(),
+                UserId = userId,
+                StartDate = startDate,
+                EndDate = endDate,
+                Description = description,
+                Status = RequestStatus.Pending,
+                RequestDate = DateTime.Now
+            };
+
+        private User ValidateApprover(int approverId)
+        {
+            var approver = _userService.GetUserById(approverId);
+
+            if (!RoleExtensions.CanApproveLeave(approver.Role))
+            {
+                _logger.Error("User {ApproverId} is not an approver", approverId);
+                throw new InvalidOperationException("User is not an approver");
+            }
+
+            return approver;
+        }
+
+        private LeaveRequest GetAndValidatePendingRequest(int requestId)
+        {
+            var request = _leaveRepository.GetById(requestId);
+
+            if (request.Status != RequestStatus.Pending)
+            {
+                _logger.Error("Leave request {RequestId} is not pending", requestId);
+                throw new InvalidOperationException("Leave request is not pending");
+            }
+
+            return request;
+        }
+
+        private void UpdateLeaveRequestStatus(LeaveRequest request, RequestStatus status, int approverId, string rejectionReason = null)
+        {
+            request.Status = status;
+            request.ApproverId = approverId;
+            request.ApprovalDate = DateTime.Now;
+
+            if (status == RequestStatus.Rejected)
+            {
+                request.RejectionReason = rejectionReason;
+            }
+
+            _leaveRepository.Update(request);
+        }
+
+        private void DeductLeaveDays(User user, int duration)
+        {
+            user.RemainingLeaveDays -= duration;
+            _userService.UpdateUser(user);
+        }
+
+        #endregion
     }
 }

@@ -11,6 +11,7 @@ namespace CoreLibrary.InterfaceLib
         void Add(LeaveRequest request);
         void Update(LeaveRequest request);
         void Delete(int id);
+        int GenerateId();
     }
 
     public interface ILeaveRequestService

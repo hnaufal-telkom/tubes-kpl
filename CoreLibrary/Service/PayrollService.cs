@@ -23,72 +23,33 @@ namespace CoreLibrary.Service
             _userRepository = userRepository;
             _leaveRequestRepository = leaveRequestRepository;
             _businessTripRepository = businessTripRepository;
-            _logger = logger;
+            _logger = logger.ForContext<PayrollService>();
         }
 
         public Payroll GeneratePayroll(int userId, DateTime periodStart, DateTime periodEnd)
         {
-            _logger.Information("Generating payroll for user {UserId} from {PeriodStart} to {PeriodEnd}", userId, periodStart, periodEnd);
-            var user = _userRepository.GetById(userId);
-            if (user == null)
-            {
-                _logger.Error("User with ID {UserId} not found", userId);
-                throw new ArgumentException($"User with ID {userId} not found");
-            }
-            var leaveDays = _leaveRequestRepository.GetByUserId(userId)
-                .Where(l => l.StartDate >= periodStart && l.EndDate <= periodEnd)
-                .Sum(l => (l.EndDate - l.StartDate).TotalDays + 1);
-            var businessTripDays = _businessTripRepository.GetByUserId(userId)
-                .Where(b => b.StartDate >= periodStart && b.EndDate <= periodEnd)
-                .Sum(b => (b.EndDate - b.StartDate).TotalDays + 1);
+            _logger.Information("Generating payroll for user {UserId} from {PeriodStart} to {PeriodEnd}",
+                userId, periodStart.ToString("yyyy-MM-dd"), periodEnd.ToString("yyyy-MM-dd"));
 
-            var allUsers = _payrollRepository.GetAll().ToList();
-            int newId = 0;
-            while (allUsers.Any(u => u.Id == newId))
-            {
-                newId++;
-            }
-
-            var payroll = new Payroll
-            {
-                Id = newId,
-                UserId = userId,
-                PeriodStart = periodStart,
-                PeriodEnd = periodEnd,
-                BasicSalary = user.BasicSalary,
-                PaymentDate = DateTime.Now.AddDays(7),
-                IsPaid = false
-            };
-
-            if (leaveDays > 0)
-            {
-                payroll.BasicSalary -= (decimal)leaveDays * (user.BasicSalary / 30);
-                _logger.Information("Leave days deducted: {LeaveDays}", leaveDays);
-            }
+            var user = GetUser(userId);
+            var leaveDays = CalculateLeaveDays(userId, periodStart, periodEnd);
+            var payroll = CreatePayroll(user, periodStart, periodEnd, leaveDays);
 
             _payrollRepository.Add(payroll);
             _logger.Information("Payroll generated successfully for user {UserId}", userId);
+
             return payroll;
         }
 
         public void MarkAsPaid(int payrollId, int approverId)
         {
-            var user = _userRepository.GetById(approverId);
-            if (RoleExtensions.CanManagePayroll(user.Role) || RoleExtensions.CanManageSystem(user.Role))
-            {
-                _logger.Error("Approver with ID {ApproverId} not found", approverId);
-                throw new ArgumentException($"Approver with ID {approverId} not found");
-            }
-            _logger.Information("Marking payroll {PayrollId} as paid", payrollId);
-            var payroll = _payrollRepository.GetById(payrollId);
-            if (payroll == null)
-            {
-                _logger.Error("Payroll with ID {PayrollId} not found", payrollId);
-                throw new ArgumentException($"Payroll with ID {payrollId} not found");
-            }
-            payroll.IsPaid = true;
-            payroll.PaymentDate = DateTime.Now;
-            _payrollRepository.Update(payroll);
+            _logger.Information("Marking payroll {PayrollId} as paid by approver {ApproverId}", payrollId, approverId);
+
+            ValidateApprover(approverId);
+            var payroll = GetPayroll(payrollId);
+
+            UpdatePayrollAsPaid(payroll);
+
             _logger.Information("Payroll {PayrollId} marked as paid successfully", payrollId);
         }
 
@@ -96,22 +57,119 @@ namespace CoreLibrary.Service
         {
             _logger.Information("Getting payrolls for user {UserId}", userId);
             var payrolls = _payrollRepository.GetAll().Where(p => p.UserId == userId).ToList();
+            if (payrolls == null || !payrolls.Any())
+            {
+                _logger.Warning("No payrolls found for user {UserId}", userId);
+                throw new KeyNotFoundException($"No payrolls found for user with ID {userId}");
+            }
+
             if (!payrolls.Any())
             {
                 _logger.Warning("No payrolls found for user {UserId}", userId);
             }
+
             return payrolls;
         }
 
         public IEnumerable<Payroll> GetPayrollsByPeriod(DateTime start, DateTime end)
         {
-            _logger.Information("Getting payrolls between {Start} and {End}", start, end);
+            if (start > end)
+            {
+                _logger.Error("Start date {Start} is after end date {End}", start.ToString("yyyy-MM-dd"), end.ToString("yyyy-MM-dd"));
+                throw new ArgumentException("Start date must be before end date");
+            }
+
+            _logger.Information("Getting payrolls between {Start} and {End}",
+                start.ToString("yyyy-MM-dd"), end.ToString("yyyy-MM-dd"));
+
             var payrolls = _payrollRepository.GetByPeriod(start, end).ToList();
+
             if (!payrolls.Any())
             {
-                _logger.Warning("No payrolls found between {Start} and {End}", start, end);
+                _logger.Warning("No payrolls found between {Start} and {End}",
+                    start.ToString("yyyy-MM-dd"), end.ToString("yyyy-MM-dd"));
             }
+
             return payrolls;
         }
+
+        #region Private Helper Methods
+
+        private User GetUser(int userId)
+        {
+            var user = _userRepository.GetById(userId);
+
+            if (user == null)
+            {
+                _logger.Error("User with ID {UserId} not found", userId);
+                throw new KeyNotFoundException($"User with ID {userId} not found");
+            }
+
+            return user;
+        }
+
+        private int CalculateLeaveDays(int userId, DateTime periodStart, DateTime periodEnd)
+        {
+            var leaveDays = _leaveRequestRepository.GetByUserId(userId)
+                .Where(l => l.StartDate >= periodStart && l.EndDate <= periodEnd && l.Status == RequestStatus.Approved)
+                .Sum(l => (l.EndDate - l.StartDate).Days + 1);
+
+            if (leaveDays > 0)
+            {
+                _logger.Information("Leave days calculated: {LeaveDays}", leaveDays);
+            }
+
+            return leaveDays;
+        }
+
+        private Payroll CreatePayroll(User user, DateTime periodStart, DateTime periodEnd, int leaveDays)
+        {
+            var dailySalary = user.BasicSalary / 30;
+            var salaryDeduction = leaveDays > 0 ? dailySalary * leaveDays : 0;
+
+            return new Payroll
+            {
+                Id = _payrollRepository.GenerateId(),
+                UserId = user.Id,
+                PeriodStart = periodStart,
+                PeriodEnd = periodEnd,
+                BasicSalary = user.BasicSalary - salaryDeduction,
+                PaymentDate = DateTime.Now.AddDays(7),
+                IsPaid = false
+            };
+        }
+
+        private void ValidateApprover(int approverId)
+        {
+            var approver = _userRepository.GetById(approverId);
+
+            if (!RoleExtensions.CanManagePayroll(approver.Role))
+            {
+                _logger.Error("Approver with ID {ApproverId} not authorized", approverId);
+                throw new UnauthorizedAccessException($"Approver with ID {approverId} not authorized");
+            }
+        }
+
+        private Payroll GetPayroll(int payrollId)
+        {
+            var payroll = _payrollRepository.GetById(payrollId);
+
+            if (payroll == null)
+            {
+                _logger.Error("Payroll with ID {PayrollId} not found", payrollId);
+                throw new KeyNotFoundException($"Payroll with ID {payrollId} not found");
+            }
+
+            return payroll;
+        }
+
+        private void UpdatePayrollAsPaid(Payroll payroll)
+        {
+            payroll.IsPaid = true;
+            payroll.PaymentDate = DateTime.Now;
+            _payrollRepository.Update(payroll);
+        }
+
+        #endregion
     }
 }

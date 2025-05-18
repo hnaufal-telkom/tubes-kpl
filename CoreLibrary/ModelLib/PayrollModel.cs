@@ -2,8 +2,8 @@
 {
     public class Payroll
     {
-        public required int Id { get; set; }
-        public required int UserId { get; set; }
+        public int Id { get; set; }
+        public int UserId { get; set; }
         public DateTime PeriodStart { get; set; }
         public DateTime PeriodEnd { get; set; }
         public decimal BasicSalary { get; set; } = decimal.Zero;

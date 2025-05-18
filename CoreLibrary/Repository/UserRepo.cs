@@ -10,12 +10,17 @@ namespace CoreLibrary.Repository
         private readonly object _lock = new();
         private readonly ILogger _logger;
 
+        public InMemoryUserRepository(ILogger logger)
+        {
+            _logger = logger.ForContext<InMemoryUserRepository>();
+        }
+
         public IEnumerable<User> GetAll()
         {
             lock (_lock)
             {
-                _logger.Information("Getting all users");
-                return _users.ToList();
+                _logger.Debug("Retrieving all users");
+                return new List<User>(_users);
             }
         }
 
@@ -23,14 +28,8 @@ namespace CoreLibrary.Repository
         {
             lock (_lock)
             {
-                _logger.Information($"Getting user by ID: {id}");
-                var user = _users.FirstOrDefault(u => u.Id == id);
-                if (user == null)
-                {
-                    _logger.Information($"User with ID {id} not found");
-                    throw new KeyNotFoundException("User not found");
-                }
-                return user;
+                _logger.Debug("Retrieving user by ID: {UserId}", id);
+                return FindUser(u => u.Id == id) ?? throw UserNotFound(id);
             }
         }
 
@@ -38,14 +37,9 @@ namespace CoreLibrary.Repository
         {
             lock (_lock)
             {
-                Log.Information($"Getting user by email: {email}");
-                var user = _users.FirstOrDefault(u => u.Email.Equals(email, StringComparison.OrdinalIgnoreCase));
-                if (user == null)
-                {
-                    Log.Warning($"User with email {email} not found");
-                    throw new KeyNotFoundException("User not found");
-                }
-                return user;
+                _logger.Debug("Retrieving user by email: {Email}", email);
+                return FindUser(u => u.Email.Equals(email, StringComparison.OrdinalIgnoreCase))
+                    ?? throw UserNotFound(email);
             }
         }
 
@@ -53,14 +47,17 @@ namespace CoreLibrary.Repository
         {
             lock (_lock)
             {
-                _logger.Information($"Adding user: {user.Name}");
-                if (_users.Any(u => u.Email.Equals(user.Email, StringComparison.OrdinalIgnoreCase))) {
-                    _logger.Error($"Email {user.Email} already exists");
+                _logger.Information("Adding new user: {UserName}", user.Name);
+
+                if (EmailExists(user.Email))
+                {
+                    _logger.Error("Email {Email} already exists", user.Email);
                     throw new InvalidOperationException("Email already exists");
                 }
 
+                user.Id = GenerateId();
                 _users.Add(user);
-                _logger.Information($"User {user.Name} added successfully");
+                _logger.Information("User {UserName} added successfully with ID: {UserId}", user.Name, user.Id);
             }
         }
 
@@ -68,18 +65,17 @@ namespace CoreLibrary.Repository
         {
             lock (_lock)
             {
-                _logger.Information($"Updating user: {user.Id}");
+                _logger.Information("Updating user ID: {UserId}", user.Id);
+
                 var index = _users.FindIndex(u => u.Id == user.Id);
-                if (index >= 0)
+                if (index < 0)
                 {
-                    _users[index] = user;
-                    _logger.Information($"User {user.Name} updated successfully");
+                    _logger.Warning("User ID {UserId} not found for update", user.Id);
+                    throw UserNotFound(user.Id);
                 }
-                else
-                {
-                    _logger.Warning($"User with ID {user.Id} not found for update");
-                    throw new KeyNotFoundException("User not found");
-                }
+
+                _users[index] = user;
+                _logger.Information("User ID {UserId} updated successfully", user.Id);
             }
         }
 
@@ -87,17 +83,16 @@ namespace CoreLibrary.Repository
         {
             lock (_lock)
             {
-                _logger.Information($"Deleting user with ID: {id}");
+                _logger.Information("Deleting user ID: {UserId}", id);
+
                 var count = _users.RemoveAll(u => u.Id == id);
-                if (count !> 0)
+                if (count == 0)
                 {
-                    _logger.Warning($"User with ID {id} not found for deletion");
-                    throw new KeyNotFoundException("User not found");
+                    _logger.Warning("User ID {UserId} not found for deletion", id);
+                    throw UserNotFound(id);
                 }
-                else
-                {
-                    _logger.Information($"User with ID {id} deleted successfully");
-                }
+
+                _logger.Information("User ID {UserId} deleted successfully", id);
             }
         }
 
@@ -105,9 +100,42 @@ namespace CoreLibrary.Repository
         {
             lock (_lock)
             {
-                _logger.Debug($"Checking if email exists: {email}");
-                return _users.Any(u => u.Email.Equals(email, StringComparison.OrdinalIgnoreCase));
+                _logger.Debug("Checking email existence: {Email}", email);
+                return EmailExists(email);
             }
         }
+
+        public int GenerateId()
+        {
+            lock (_lock)
+            {
+                _logger.Debug("Generating new user ID");
+                return _users.Count == 0 ? 1 : _users.Max(u => u.Id) + 1;
+            }
+        }
+
+        #region Private Helper Methods
+
+        private User? FindUser(Func<User, bool> predicate)
+        {
+            return _users.FirstOrDefault(predicate);
+        }
+
+        private bool EmailExists(string email)
+        {
+            return _users.Exists(u => u.Email.Equals(email, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private KeyNotFoundException UserNotFound(int id)
+        {
+            return new KeyNotFoundException($"User with ID {id} not found");
+        }
+
+        private KeyNotFoundException UserNotFound(string email)
+        {
+            return new KeyNotFoundException($"User with email {email} not found");
+        }
+
+        #endregion
     }
 }

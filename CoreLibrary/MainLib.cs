@@ -6,11 +6,10 @@ namespace CoreLibrary
 
     public static class RoleExtensions
     {
-        public static bool CanManageUsers(this Role role) => role >= Role.HRD;
-        public static bool CanApproveLeave(this Role role) => role >= Role.Supervisor;
-        public static bool CanApproveTrips(this Role role) => role >= Role.Supervisor;
-        public static bool CanManagePayroll(this Role role) => role >= Role.Finance;
-        public static bool CanManageSystem(this Role role) => role == Role.SysAdmin;
+        public static bool CanManageUsers(this Role role) => role == Role.HRD || role == Role.SysAdmin;
+        public static bool CanApproveLeave(this Role role) => role == Role.Supervisor || role == Role.SysAdmin;
+        public static bool CanApproveTrips(this Role role) => role == Role.Supervisor || role == Role.SysAdmin;
+        public static bool CanManagePayroll(this Role role) => role == Role.Finance || role == Role.SysAdmin;
     }
 
     public static class LoggerConfig

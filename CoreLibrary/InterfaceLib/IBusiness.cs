@@ -11,6 +11,7 @@ namespace CoreLibrary.InterfaceLib
         void Add(BusinessTrip businessTrip);
         void Update(BusinessTrip businessTrip);
         void Delete(int id);
+        int GenerateId();
     }
 
     public interface IBusinessTripService

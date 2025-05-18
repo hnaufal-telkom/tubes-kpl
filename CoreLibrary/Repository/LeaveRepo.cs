@@ -10,12 +10,17 @@ namespace CoreLibrary.Repository
         private readonly object _lock = new();
         private readonly ILogger _logger;
 
+        public InMemoryLeaveRequestRepository(ILogger logger)
+        {
+            _logger = logger.ForContext<InMemoryLeaveRequestRepository>();
+        }
+
         public IEnumerable<LeaveRequest> GetAll()
         {
             lock (_lock)
             {
-                _logger.Information("Getting all Leave Request");
-                return _requests.ToList();
+                _logger.Debug("Retrieving all leave requests");
+                return new List<LeaveRequest>(_requests);
             }
         }
 
@@ -23,14 +28,8 @@ namespace CoreLibrary.Repository
         {
             lock (_lock)
             {
-                _logger.Information($"Getting leave request by ID: {id}");
-                var request = _requests.FirstOrDefault(x => x.Id == id);
-                if (request == null)
-                {
-                    _logger.Warning($"Leave request with ID {id} not found");
-                    throw new KeyNotFoundException("Leave request not found");
-                }
-                return request;
+                _logger.Debug("Retrieving leave request by ID: {RequestId}", id);
+                return FindRequest(r => r.Id == id) ?? throw RequestNotFound(id);
             }
         }
 
@@ -38,8 +37,8 @@ namespace CoreLibrary.Repository
         {
             lock (_lock)
             {
-                _logger.Information($"Getting leave request for user ID: {userId}");
-                return _requests.Where(x => x.UserId == userId);
+                _logger.Debug("Retrieving leave requests for user ID: {UserId}", userId);
+                return _requests.Where(r => r.UserId == userId).ToList();
             }
         }
 
@@ -47,37 +46,37 @@ namespace CoreLibrary.Repository
         {
             lock (_lock)
             {
-                _logger.Information("Getting all pending leave requests");
+                _logger.Debug("Retrieving pending leave requests");
                 return _requests.Where(r => r.Status == RequestStatus.Pending).ToList();
             }
         }
 
         public void Add(LeaveRequest request)
         {
-            lock ( _lock)
+            lock (_lock)
             {
-                _logger.Information($"Adding leave request for user ID: {request.UserId}");
+                _logger.Information("Adding leave request for user ID: {UserId}", request.UserId);
+                request.Id = GenerateId();
                 _requests.Add(request);
-                _logger.Information($"Leave request for user ID {request.UserId} added successfully");
+                _logger.Information("Leave request added successfully with ID: {RequestId}", request.Id);
             }
         }
 
         public void Update(LeaveRequest request)
         {
-            lock ( _lock)
+            lock (_lock)
             {
-                _logger.Information($"Updating leave request for user ID: {request.UserId}");
+                _logger.Information("Updating leave request ID: {RequestId}", request.Id);
+
                 var index = _requests.FindIndex(r => r.Id == request.Id);
-                if (index >= 0)
+                if (index < 0)
                 {
-                    _requests[index] = request;
-                    _logger.Information($"Leave request for user ID {request.UserId} updated successfully");
+                    _logger.Warning("Leave request ID {RequestId} not found for update", request.Id);
+                    throw RequestNotFound(request.Id);
                 }
-                else
-                {
-                    _logger.Warning($"Leave request with ID {request.Id} not found for update");
-                    throw new KeyNotFoundException("Leave request not found");
-                }
+
+                _requests[index] = request;
+                _logger.Information("Leave request ID {RequestId} updated successfully", request.Id);
             }
         }
 
@@ -85,18 +84,40 @@ namespace CoreLibrary.Repository
         {
             lock (_lock)
             {
-                _logger.Information($"Deleting leave request with ID: {id}");
+                _logger.Information("Deleting leave request ID: {RequestId}", id);
+
                 var count = _requests.RemoveAll(r => r.Id == id);
-                if (count > 0)
+                if (count == 0)
                 {
-                    _logger.Warning($"Request with ID {id} not found");
-                    throw new KeyNotFoundException("Request not found");
+                    _logger.Warning("Leave request ID {RequestId} not found for deletion", id);
+                    throw RequestNotFound(id);
                 }
-                else
-                {
-                    _logger.Information($"Request wtih ID {id} deleted successfully");
-                }
+
+                _logger.Information("Leave request ID {RequestId} deleted successfully", id);
             }
         }
+
+        public int GenerateId()
+        {
+            lock (_lock)
+            {
+                _logger.Debug("Generating new leave request ID");
+                return _requests.Count == 0 ? 1 : _requests.Max(r => r.Id) + 1;
+            }
+        }
+
+        #region Private Helper Methods
+
+        private LeaveRequest? FindRequest(Func<LeaveRequest, bool> predicate)
+        {
+            return _requests.FirstOrDefault(predicate);
+        }
+
+        private KeyNotFoundException RequestNotFound(int id)
+        {
+            return new KeyNotFoundException($"Leave request with ID {id} not found");
+        }
+
+        #endregion
     }
 }

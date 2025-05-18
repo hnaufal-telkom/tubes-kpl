@@ -17,73 +17,37 @@ namespace CoreLibrary.Service
 
         public User Register(string name, string email, string password, Role role, decimal basicSalary)
         {
-            _logger.Information($"Registering User: {name}, Email: {email}, Role: {role}");
-            if (_repository.EmailCheck(email))
-            {
-                _logger.Warning($"Email already registered");
-                throw new ArgumentException("Email already registered");
-            }
+            _logger.Information("Registering User: {Name}, Email: {Email}, Role: {Role}", name, email, role);
 
-            if (password.Length < 8)
-            {
-                _logger.Warning($"Password too short: {password.Length} characters");
-                throw new ArgumentException("Password must be at least 8 characters");
-            }
-
-            if (string.IsNullOrEmpty(name) || string.IsNullOrEmpty(email) || string.IsNullOrEmpty(password))
-            {
-                _logger.Warning("Name, email, and password are required");
-                throw new ArgumentException("Name, email, and password are required");
-            }
-
-            if (basicSalary < 0)
-            {
-                _logger.Warning($"Basic salary cannot be negative: {basicSalary}");
-                throw new ArgumentException("Basic salary cannot be negative");
-            }
-
-            var allUsers = _repository.GetAll().ToList();
-            int newId = 0;
-            while (allUsers.Any(u => u.Id == newId))
-            {
-                newId++;
-            }
+            ValidateRegistration(name, email, password, basicSalary);
 
             var user = new User
             {
-                Id = newId,
+                Id = _repository.GenerateId(),
                 Name = name,
                 Email = email,
                 Password = password,
                 Role = role,
-                JoinDate = DateTime.Now,
-                RemainingLeaveDays = 12,
                 BasicSalary = basicSalary
             };
 
             _repository.Add(user);
-            _logger.Information($"User {name} registered successfully, {role}");
+            _logger.Information("User {Name} registered successfully as {Role}", name, role);
             return user;
         }
 
         public User Authenticate(string email, string password)
         {
-            try
+            var user = _repository.GetByEmail(email) ?? throw new KeyNotFoundException("User not found");
+
+            if (user.Password != password)
             {
-                var user = _repository.GetByEmail(email);
-                if (user.Password == password)
-                {
-                    _logger.Information($"User {user.Name} authenticated successfully");
-                    return user;
-                }
-                _logger.Warning($"Invalid credentials for email: {email}");
+                _logger.Warning("Invalid credentials for email: {Email}", email);
                 throw new KeyNotFoundException("Invalid credentials");
             }
-            catch (KeyNotFoundException)
-            {
-                _logger.Warning($"User with email {email} was not found.");
-                throw new KeyNotFoundException("User not found");
-            }
+
+            _logger.Information("User {Name} authenticated successfully", user.Name);
+            return user;
         }
 
         public IEnumerable<User> GetAllUser()
@@ -92,160 +56,140 @@ namespace CoreLibrary.Service
             return _repository.GetAll();
         }
 
-        public User GetUserById(int userId)
-        {
-            _logger.Information($"Getting user by ID: {userId}");
-            return _repository.GetById(userId);
-        }
+        public User GetUserById(int userId) => _repository.GetById(userId);
 
         public void UpdateUserProfile(int userId, string name, string email)
         {
-            try
-            {
-                _logger.Information($"Updating user profile for ID: {userId}, Name: {name}, Email: {email}");
-                var user = _repository.GetById(userId);
-                user.Name = name;
-                user.Email = email;
-                _repository.Update(user);
-                _logger.Information($"User details updated successfully for ID: {userId}");
-            }
-            catch (KeyNotFoundException)
-            {
-                _logger.Warning($"User with email {userId} was not found.");
-                throw new KeyNotFoundException("User not found");
-            }
+            if (string.IsNullOrEmpty(name)) throw new ArgumentException("Name is required");
+            if (string.IsNullOrEmpty(email)) throw new ArgumentException("Email is required");
+            var user = GetUserAndValidate(userId);
+            user.Name = name;
+            user.Email = email;
+            _repository.Update(user);
+            _logger.Information("User details updated successfully for ID: {UserId}", userId);
         }
 
         public void ChangePassword(int userId, string currentPassword, string newPassword)
         {
-            try
+            if (string.IsNullOrEmpty(newPassword)) throw new ArgumentException("New Password is required");
+            if (newPassword.Length < 8)
             {
-                _logger.Information($"Changing password for user ID: {userId}");
-                if (newPassword.Length < 8)
-                {
-                    _logger.Error($"New password too short: {newPassword.Length} characters");
-                    throw new ArgumentException("Password must be at least 8 characters");
-                }
-                var user = _repository.GetById(userId);
-                if (user.Password != currentPassword)
-                {
-                    _logger.Error($"Current password does not match for user ID: {userId}");
-                    throw new ArgumentException("Current password is incorrect");
-                }
-                user.Password = newPassword;
-                _repository.Update(user);
-                _logger.Information($"Password changed successfully for user ID: {userId}");
+                _logger.Error("New password too short: {Length} characters", newPassword.Length);
+                throw new ArgumentException("Password must be at least 8 characters");
             }
-            catch (KeyNotFoundException)
+
+            var user = GetUserAndValidate(userId);
+
+            if (user.Password != currentPassword)
             {
-                _logger.Warning($"User with email {userId} was not found.");
-                throw new KeyNotFoundException("User not found");
+                _logger.Error("Current password does not match for user ID: {UserId}", userId);
+                throw new ArgumentException("Current password is incorrect");
             }
+
+            user.Password = newPassword;
+            _repository.Update(user);
+            _logger.Information("Password changed successfully for user ID: {UserId}", userId);
         }
 
         public void DeleteUserAccount(int adminId, int userId)
         {
-            try
-            {
-                _logger.Information($"Deleting account for user ID: {userId}");
-                var admin = _repository.GetById(adminId);
-                if (RoleExtensions.CanManageUsers(admin.Role) || RoleExtensions.CanManageSystem(admin.Role))
-                {
-                    _repository.Delete(userId);
-                    _logger.Information($"User account deleted successfully for user ID: {userId}");
-                }
-                else
-                {
-                    _logger.Warning($"Admin System Role Required! {adminId} not Admin");
-                    throw new ArgumentException("Role SysAdmin needed");
-                }
-            }
-            catch (KeyNotFoundException)
-            {
-                _logger.Warning($"User with ID: {userId} was not found.");
-                throw new KeyNotFoundException("User not found");
-            }
+            ValidateAdminPermission(adminId);
+            _repository.Delete(userId);
+            _logger.Information("User account deleted successfully for user ID: {UserId}", userId);
         }
 
         public void ChangeRole(int adminId, int userId, Role role)
         {
-            try
-            {
-                _logger.Information($"Changing Role for user ID: {userId}");
-                var adminUser = _repository.GetById(adminId);
-                var user = _repository.GetById(userId);
-                if (RoleExtensions.CanManageUsers(adminUser.Role) || RoleExtensions.CanManageSystem(adminUser.Role))
-                {
-                    if (user.Role == role)
-                    {
-                        _logger.Warning($"User Role with ID : {userId} already {role}");
-                        throw new ArgumentException("User Role already satisfied");
-                    }
-                    else
-                    {
-                        user.Role = role;
-                        _repository.Update(user);
-                        _logger.Information($"Role changed successfully for user ID: {userId}");
-                    }
-                }
-                else
-                {
-                    _logger.Warning($"Admin System Role Required! {adminId} not Admin");
-                    throw new ArgumentException("Role SysAdmin needed");
-                }
-            }
-            catch (KeyNotFoundException)
-            {
-                _logger.Warning($"User with ID: {userId} was not found.");
-                throw new KeyNotFoundException("User not found");
-            }
-        }
+            ValidateAdminPermission(adminId);
 
-        public void UpdateUser(User user)
-        {
-            try
+            var user = GetUserAndValidate(userId);
+
+            if (user.Role == role)
             {
-                _logger.Information($"Updating user details for ID: {user.Id}");
-                var existingUser = _repository.GetById(user.Id);
-                existingUser.Name = user.Name;
-                existingUser.Email = user.Email;
-                existingUser.Password = user.Password;
-                existingUser.Role = user.Role;
-                existingUser.RemainingLeaveDays = user.RemainingLeaveDays;
-                _repository.Update(existingUser);
-                _logger.Information($"User details updated successfully for ID: {user.Id}");
+                _logger.Warning("User Role with ID: {UserId} already {Role}", userId, role);
+                throw new ArgumentException("User Role already satisfied");
             }
-            catch (KeyNotFoundException)
-            {
-                _logger.Warning($"User with ID: {user.Id} was not found.");
-                throw new KeyNotFoundException("User not found");
-            }
+
+            user.Role = role;
+            _repository.Update(user);
+            _logger.Information("Role changed successfully for user ID: {UserId}", userId);
         }
 
         public void UpdateSalary(int userId, decimal salary, int approverId)
         {
+            ValidateAdminPermission(approverId);
+
+            var user = GetUserAndValidate(userId);
+            user.BasicSalary = salary;
+
+            _repository.Update(user);
+            _logger.Information("Salary updated successfully for user ID: {UserId}", userId);
+        }
+
+        public void UpdateUser(User user)
+        {
+            var existingUser = GetUserAndValidate(user.Id);
+
+            existingUser.Name = user.Name;
+            existingUser.Email = user.Email;
+            existingUser.Password = user.Password;
+            existingUser.Role = user.Role;
+            existingUser.RemainingLeaveDays = user.RemainingLeaveDays;
+
+            _repository.Update(existingUser);
+            _logger.Information("User details updated successfully for ID: {Id}", user.Id);
+        }
+
+        #region Private Helper Methods
+
+        private void ValidateRegistration(string name, string email, string password, decimal basicSalary)
+        {
+            if (string.IsNullOrEmpty(name)) throw new ArgumentException("Name is required");
+            if (string.IsNullOrEmpty(email)) throw new ArgumentException("Email is required");
+            if (string.IsNullOrEmpty(password)) throw new ArgumentException("Password is required");
+
+            if (_repository.EmailCheck(email))
+            {
+                _logger.Warning("Email already registered");
+                throw new ArgumentException("Email already registered");
+            }
+
+            if (password.Length < 8)
+            {
+                _logger.Warning("Password too short: {Length} characters", password.Length);
+                throw new ArgumentException("Password must be at least 8 characters");
+            }
+
+            if (basicSalary < 0)
+            {
+                _logger.Warning("Basic salary cannot be negative: {Salary}", basicSalary);
+                throw new ArgumentException("Basic salary cannot be negative");
+            }
+        }
+
+        private User GetUserAndValidate(int userId)
+        {
             try
             {
-                _logger.Information($"Updating salary for user ID: {userId}");
-                var approver = _repository.GetById(approverId);
-                if (RoleExtensions.CanManagePayroll(approver.Role) || RoleExtensions.CanManageSystem(approver.Role))
-                {
-                    var user = _repository.GetById(userId);
-                    user.BasicSalary = salary;
-                    _repository.Update(user);
-                    _logger.Information($"Salary updated successfully for user ID: {userId}");
-                }
-                else
-                {
-                    _logger.Warning($"Admin System Role Required! {approverId} not Admin");
-                    throw new ArgumentException("Role SysAdmin needed");
-                }
+                return _repository.GetById(userId);
             }
             catch (KeyNotFoundException)
             {
-                _logger.Warning($"User with ID: {userId} was not found.");
-                throw new KeyNotFoundException("User not found");
+                _logger.Warning("User with ID: {UserId} was not found", userId);
+                throw;
             }
         }
+
+        private void ValidateAdminPermission(int adminId)
+        {
+            var admin = _repository.GetById(adminId);
+            if (!RoleExtensions.CanManageUsers(admin.Role))
+            {
+                _logger.Warning("Admin System Role Required! {AdminId} not Admin", adminId);
+                throw new ArgumentException("Role SysAdmin needed");
+            }
+        }
+
+        #endregion
     }
 }
