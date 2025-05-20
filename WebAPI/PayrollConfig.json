@@ -1,5 +1,5 @@
 {
-  "PayrollSettings": {
+  "PayrollConfig": {
     "SalaryRates": {
       "Employee": 5000000,
       "Supervisor": 8000000,
@@ -10,7 +10,6 @@
     "Allowances": {
       "Meal": 2000000,
       "TravelAllowance": 3000000
-    },
-    "PaymentSchedule": "5days"
+    }
   }
 }
