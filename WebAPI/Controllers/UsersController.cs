@@ -1,5 +1,7 @@
-﻿using MainLibrary;
+using CoreLibrary.Service;
 using Microsoft.AspNetCore.Mvc;
+using CoreLibrary;
+using WebAPI.DTO;
 
 namespace WebAPI.Controllers
 {
@@ -7,76 +9,187 @@ namespace WebAPI.Controllers
     [Route("api/[controller]")]
     public class UsersController : ControllerBase
     {
-        private readonly IUserService _usersService;
+        private readonly UserService _userService;
+        private readonly Serilog.ILogger _logger;
 
-        public UsersController(IUserService userService)
+        public UsersController(UserService userService,Serilog.ILogger logger)
         {
-            _usersService = userService;
+            _userService = userService;
+            _logger = logger.ForContext<UsersController>();
         }
 
-        [HttpGet]
-        public ActionResult<IEnumerable<User>> GetAll()
-        {
-            var repo = (InMemoryUserRepository)_usersService.GetType()
-                .GetField("_repository", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-                .GetValue(_usersService);
-            return Ok(repo.GetAll());
-        }
-
-        [HttpGet("{id}")]
-        public ActionResult<User> GetById(string id)
+        [HttpPost("CreateDummy")]
+        public IActionResult CreateDummy()
         {
             try
             {
-                return Ok(_usersService.GetUserById(id));
-            }
-            catch (KeyNotFoundException)
-            {
-                return NotFound();
-            }
-        }
+                var names = new[] { "Fizryan", "Haidar", "Naufal", "Fathir" };
+                var emails = new[] {
+                "fizryan@mail.com", "haidar@mail.com", "naufal@mail.com", "fathir@mail.com"
+                };
+                var passwords = new[] {
+                    "password123", "MonsterAndSouls1", "superNova865", "dasd11121"
+                };
+                var salaries = new[] {
+                    50000000, 45000000, 40000000, 50000000
+                };
+                var roles = new[] {
+                    Role.SysAdmin, Role.Employee, Role.HRD, Role.Supervisor
+                };
 
-        [HttpPost]
-        public ActionResult<User> Create([FromBody] User user)
-        {
-            try
-            {
-                var createdUser = _usersService.Register(user.Name, user.Email, user.Password, user.Role);
-                return CreatedAtAction(nameof(GetById), new { id = createdUser.Id }, createdUser);
+                for (int i = 0; i < names.Length; i++)
+                {
+                    _userService.Register(
+                        name: names[i],
+                        email: emails[i],
+                        password: passwords[i],
+                        role: roles[i],
+                        basicSalary: salaries[i]
+                    );
+                }
+                return Ok("Dummy users created successfully");
             }
-            catch (ArgumentException ex)
+            catch (Exception ex)
             {
+                _logger.Error(ex, "Error creating dummy users");
                 return BadRequest(ex.Message);
             }
         }
 
-        [HttpPut("{id}")]
-        public IActionResult Update(string id, [FromBody] User user)
+        [HttpGet("GetAllUser")]
+        public IActionResult GetAllUsers()
         {
-            if (id != user.Id) return BadRequest("ID mismatch");
-
             try
             {
-                _usersService.UpdateUser(user);
-                return NoContent();
+                var users = _userService.GetAllUser();
+                return Ok(users);
             }
-            catch (KeyNotFoundException)
+            catch (Exception ex)
             {
-                return NotFound();
+                _logger.Error(ex, "Error retrieving all users");
+                return BadRequest(ex.Message);
             }
         }
 
-        [HttpDelete("{id}")]
-        public IActionResult Delete(string id)
+        [HttpGet("GetUserById/{userId}")]
+        public IActionResult GetUserById(int userId)
         {
             try
             {
-                _usersService.DeactivateUser(id);
-                return NoContent();
+                var user = _userService.GetUserById(userId);
+                return Ok(user);
             }
-            catch (KeyNotFoundException)
+            catch (Exception ex)
             {
-                return NotFound();
+                _logger.Error(ex, "Error retrieving user by ID");
+                return BadRequest(ex.Message);
+            }
+        }
+
+        [HttpPost("Register")]
+        public IActionResult Register([FromBody] UserDTO user)
+        {
+            try
+            {
+                var registeredUser = _userService.Register(user.Name, user.Email, user.Password, user.Role, user.BasicSalary);
+                var users = _userService.GetUserById(registeredUser.Id);
+                return CreatedAtAction("Register", new { users.Id }, users);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Error registering user");
+                return BadRequest(ex.Message);
+            }
+        }
+
+        [HttpPost("Authenticate")]
+        public IActionResult Authenticate([FromBody] AuthRequest user)
+        {
+            try
+            {
+                var authenticatedUser = _userService.Authenticate(user.Email, user.Password);
+                return Ok(authenticatedUser);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Error authenticating user");
+                return BadRequest(ex.Message);
+            }
+        }
+
+        [HttpPut("UpdatePassword")]
+        public IActionResult UpdatePassword([FromBody] ChangePasswordUser user)
+        {
+            try
+            {
+                var users = _userService.GetAllUser().FirstOrDefault(u => u.Email == user.Email);
+                _userService.ChangePassword(users.Id, user.OldPassword, user.NewPassword);
+                return Ok("Password updated successfully");
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Error updating password");
+                return BadRequest(ex.Message);
+            }
+        }
+
+        [HttpPut("ChangeUserProfile/{userId}")]
+        public IActionResult UpdateUser(int userId, [FromBody] UserProfile user)
+        {
+            try
+            {
+                _userService.UpdateUserProfile(userId, user.Name, user.Email);
+                return Ok("User updated successfully");
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Error updating user");
+                return BadRequest(ex.Message);
+            }
+        }
+
+        [HttpPut("ChangeUserRole/{adminId}&{userId}&{role}")]
+        public IActionResult UpdateUserRole(int adminId, int userId, int role)
+        {
+            try
+            {
+                _userService.ChangeRole(adminId, userId, (Role)role);
+                return Ok("User role updated successfully");
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Error updating user role");
+                return BadRequest(ex.Message);
+            }
+        }
+
+        [HttpPut("ChangeUserSalary/{adminId}&{userId}&{salary}")]
+        public IActionResult UpdateUserSalary(int adminId, int userId, decimal salary)
+        {
+            try
+            {
+                _userService.UpdateSalary(userId, salary, adminId);
+                return Ok("User salary updated successfully");
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Error updating user salary");
+                return BadRequest(ex.Message);
+            }
+        }
+
+        [HttpDelete("DeleteUser/{adminId}&{userId}")]
+        public IActionResult DeleteUser(int adminId, int userId)
+        {
+            try
+            {
+                _userService.DeleteUserAccount(adminId, userId);
+                return Ok("User deleted successfully");
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Error deleting user");
+                return BadRequest(ex.Message);
             }
         }
     }

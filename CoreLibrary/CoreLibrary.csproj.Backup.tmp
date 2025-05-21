@@ -8,9 +8,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-<<<<<<<< HEAD:TubesKPL/TubesKPL.csproj
-    <ProjectReference Include="..\MainLibrary\MainLibrary.csproj" />
-========
     <Folder Include="ControllerLib\" />
   </ItemGroup>
 

@@ -1,5 +1,9 @@
 using MainLibrary;
 using Microsoft.AspNetCore.Mvc;
+using CoreLibrary.InterfaceLib;
+using CoreLibrary.Repository;
+using CoreLibrary.Service;
+using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -11,14 +15,12 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 builder.Services.AddSingleton<IUserRepository, InMemoryUserRepository>();
+builder.Services.AddSingleton<Serilog.ILogger>(Log.Logger);
+builder.Services.AddSingleton<UserService>();
 builder.Services.AddSingleton<ILeaveRequestRepository, InMemoryLeaveRequestRepository>();
-builder.Services.AddSingleton<IBusinessTripRepository, InMemoryBusinessTripRepository>();
-builder.Services.AddSingleton<IPayrollRepository, InMemoryPayrollRepository>();
 
 builder.Services.AddSingleton<IUserService, UserService>();
 builder.Services.AddSingleton<LeaveService>();
-builder.Services.AddSingleton<BusinessTripService>();
-builder.Services.AddSingleton<PayrollService>();
 
 var app = builder.Build();
 
