@@ -8,11 +8,15 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Serilog" Version="4.2.0" />
+<<<<<<<< HEAD:TubesKPL/TubesKPL.csproj
+    <ProjectReference Include="..\MainLibrary\MainLibrary.csproj" />
+========
+    <Folder Include="ControllerLib\" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\CoreLibrary\CoreLibrary.csproj" />
+    <PackageReference Include="Serilog" Version="4.2.0" />
+>>>>>>>> fizryan:CoreLibrary/CoreLibrary.csproj.Backup.tmp
   </ItemGroup>
 
 </Project>

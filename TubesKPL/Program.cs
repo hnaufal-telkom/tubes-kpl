@@ -1,10 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
-using MainLibrary;
-using User = MainLibrary.User;
-using LeaveRequest = MainLibrary.LeaveRequest;
-using BusinessTrip = MainLibrary.BusinessTrip;
+using CoreLibrary;
+using User = CoreLibrary.ModelLib.User;
+using LeaveRequest = CoreLibrary.ModelLib.LeaveRequest;
+using BusinessTrip = CoreLibrary.ModelLib.BusinessTrip;
 using System.Net.Http.Headers;
+using System.Runtime.CompilerServices;
+using Serilog;
+using CoreLibrary.ModelLib;
 
 // Define the different states of the application
 public enum AppState
@@ -21,26 +24,29 @@ public enum AppState
 public class Program
 {
 
-    private static UserService userService;
-    private static LeaveService leaveService;
-    private static BusinessTripService businessTripService;
-    private static PayrollService payrollService;
+    private static CoreLibrary.Service.UserService userService;
+    private static CoreLibrary.Service.LeaveService leaveService;
+    private static CoreLibrary.Service.BusinessTripService businessTripService;
+    private static CoreLibrary.Service.PayrollService payrollService;
 
     private static User loggedInUser = null;
     private static AppState currentState = AppState.Login;
     private static AppState previousState = AppState.Login;
 
+    private static ILogger logger = CoreLibrary.LoggerConfig.ConfigureLogger();
+    //private static ILogger logger = null;
+
     public static void Main(string[] args)
     {
-        var userRepo = new InMemoryUserRepository();
-        var leaveRepo = new InMemoryLeaveRequestRepository();
-        var tripRepo = new InMemoryBusinessTripRepository();
-        var payrollRepo = new InMemoryPayrollRepository();
+        var userRepo = new CoreLibrary.Repository.InMemoryUserRepository(logger);
+        var leaveRepo = new CoreLibrary.Repository.InMemoryLeaveRequestRepository(logger);
+        var tripRepo = new CoreLibrary.Repository.InMemoryBusinessTripRepository(logger);
+        var payrollRepo = new CoreLibrary.Repository.InMemoryPayrollRepository(logger);
 
-        userService = new UserService(userRepo);
-        leaveService = new LeaveService(leaveRepo, userService);
-        businessTripService = new BusinessTripService(tripRepo, userService);
-        payrollService = new PayrollService(payrollRepo, userService, leaveRepo, tripRepo);
+        userService = new CoreLibrary.Service.UserService(userRepo, logger);
+        leaveService = new CoreLibrary.Service.LeaveService(leaveRepo, userService, logger);
+        businessTripService = new CoreLibrary.Service.BusinessTripService(tripRepo, userRepo, logger);
+        payrollService = new CoreLibrary.Service.PayrollService(payrollRepo, userRepo, leaveRepo, tripRepo, logger);
 
         // Add some initial users for testing
         InitializeTestData();
@@ -66,11 +72,8 @@ public class Program
     {
         try
         {
-                userService.Register("Admin User", "admin@company.com", "Admin123!", Role.SysAdmin);
-                userService.Register("HR Manager", "hr@company.com", "Hr123456!", Role.HRD);
-                userService.Register("Team Supervisor", "supervisor@company.com", "Super123!", Role.Supervisor);
-                userService.Register("Finance Officer", "finance@company.com", "Finance1!", Role.Finance);
-                userService.Register("Regular Employee", "employee@company.com", "Employee1!", Role.Employee);
+            userService.Register("Fizryan", "fizryan@mail.com", "password123", Role.SysAdmin, 50000000);
+            userService.Register("Naufal", "naufal@mail.com", "pass0000122231", Role.Employee, 2000000);
         }
         catch (Exception ex)
         {
@@ -201,7 +204,7 @@ public class Program
                 ["1"] = "View all users",
                 ["2"] = "Add new user",
                 ["3"] = "Edit user",
-                ["4"] = "Deactivate user",
+                ["4"] = "Delete user",
                 ["5"] = "Back to Main Menu"
             });
 
@@ -210,32 +213,32 @@ public class Program
             ["1"] = () => ViewAllUsers(),
             ["2"] = () => AddNewUser(),
             ["3"] = () => EditUser(),
-            ["4"] = () => DeactivateUser(),
+            ["4"] = () => DeleteUser(),
             ["5"] = () => TransitionTo(AppState.MainMenu),
         });
     }
 
     private static void ViewAllUsers()
     {
-        //Console.Clear();
-        //Console.WriteLine("\n--- All Users ---");
-        //var users = ((InMemoryUserRepository)(userService).Repository.GetAll();
+        Console.Clear();
+        Console.WriteLine("\n--- All Users ---");
+        var users = userService.GetAllUser();
 
-        //if (users.Any())
-        //{
-        //    Console.WriteLine("ID\tName\tEmail\tRole\tJoin Date\tStatus");
-        //    Console.WriteLine("--------------------------------------------------");
-        //    foreach (var user in users)
-        //    {
-        //        Console.WriteLine($"{user.Id}\t{user.Name}\t{user.Email}\t{user.Role}\t{user.JoinDate.ToShortDateString()}\t{(user.IsActive ? "Active" : "Inactive")}");
-        //    }
-        //}
-        //else
-        //{
-        //    Console.WriteLine("No users found.");
-        //}
-        //Console.WriteLine("\nPress Enter to continue...");
-        //Console.ReadLine();
+        if (users.Any())
+        {
+            Console.WriteLine("ID\tName\tEmail\tRole\tJoin Date\tStatus");
+            Console.WriteLine("--------------------------------------------------");
+            foreach (var user in users)
+            {
+                Console.WriteLine($"{user.Id}\t{user.Name}\t{user.Email}\t\t{user.Role}\t{user.JoinDate.ToShortDateString()}");
+            }
+        }
+        else
+        {
+            Console.WriteLine("No users found.");
+        }
+        Console.WriteLine("\nPress Enter to continue...");
+        Console.ReadLine();
 
         Console.WriteLine("WIP");
     }
@@ -254,6 +257,10 @@ public class Program
         Console.Write("Password: ");
         string password = Console.ReadLine();
 
+        Console.WriteLine("Salary: ");
+        string salary = Console.ReadLine();
+        if (salary == null) { salary = "0"; }
+
         Console.WriteLine("Available Roles:");
         foreach (var role in Enum.GetValues(typeof(Role)))
         {
@@ -264,7 +271,7 @@ public class Program
 
         try
         {
-            var newUser = userService.Register(name, email, password, roleSelected);
+            var newUser = userService.Register(name, email, password, roleSelected, int.Parse(salary));
             Console.WriteLine($"User {newUser.Name} created successfully with ID: {newUser.Id}");
         }
         catch (Exception ex)
@@ -282,7 +289,7 @@ public class Program
         Console.WriteLine("\n--- Edit User ---");
 
         Console.Write("Enter User ID to edit: ");
-        string userId = Console.ReadLine();
+        int userId = int.Parse(Console.ReadLine());
 
         try
         {
@@ -315,13 +322,13 @@ public class Program
         Console.ReadLine();
     }
 
-    private static void DeactivateUser()
+    private static void DeleteUser()
     {
         Console.Clear();
-        Console.WriteLine("\n--- Deactivate User ---");
+        Console.WriteLine("\n--- Delete User ---");
 
-        Console.Write("Enter User ID to deactivate: ");
-        string userId = Console.ReadLine();
+        Console.Write("Enter User ID to delete: ");
+        int userId = int.Parse(Console.ReadLine());
 
         try 
         {
@@ -332,31 +339,22 @@ public class Program
                 return;
             }
 
-            Console.WriteLine($"1. {(user.IsActive ? "Deactivate" : "Activate")} user");
-            Console.WriteLine("2. Delete user permanently");
-            Console.WriteLine("3. Cancel");
+            Console.WriteLine("1. Delete user permanently");
+            Console.WriteLine("2. Cancel");
             Console.Write("Enter your choice: ");
             string choice = Console.ReadLine();
 
             switch (choice)
             {
                 case "1":
-                    user.IsActive = !user.IsActive;
-                    userService.UpdateUser(user);
-                    Console.WriteLine($"User {(user.IsActive ? "activated" : "deactivated")} successfully.");
-                    break;
-                case "2":
                     Console.Write("Are you sure you want to permanently delete this user? (Y/N): ");
                     if (Console.ReadLine().Equals("Y", StringComparison.OrdinalIgnoreCase))
                     {
-                        // In a real application, we would have a Delete method in the service
-                        // For now, we'll just deactivate
-                        user.IsActive = false;
-                        userService.UpdateUser(user);
-                        Console.WriteLine("User deactivated.");
+                        userService.DeleteUserAccount(loggedInUser.Id, userId);
+                        Console.WriteLine("User deleted.");
                     }
                     break;
-                case "3":
+                case "2":
                     return;
                 default:
                     Console.WriteLine("Invalid choice.");
@@ -431,7 +429,7 @@ public class Program
     {
         Console.Clear();
         Console.WriteLine("\n--- Pending Leave Requests ---");
-        var requests = leaveService.GetPendingRequests();
+        var requests = leaveService.GetPendingRequest();
 
         if (requests.Any())
         {
@@ -444,10 +442,11 @@ public class Program
             }
 
             Console.Write("\nEnter Request ID to approve/reject (or press Enter to go back): ");
-            string requestId = Console.ReadLine();
+            string requestIdStr = Console.ReadLine();
 
-            if (!string.IsNullOrEmpty(requestId))
+            if (!string.IsNullOrEmpty(requestIdStr))
             {
+                int requestId = int.Parse(requestIdStr);
                 ProcessLeaveRequestApproval(requestId);
             }
         }
@@ -458,7 +457,7 @@ public class Program
         }
     }
 
-    private static void ProcessLeaveRequestApproval(string requestId)
+    private static void ProcessLeaveRequestApproval(int requestId)
     {
         Console.WriteLine("\n1. Approve");
         Console.WriteLine("2. Reject");
@@ -593,10 +592,11 @@ public class Program
             }
 
             Console.Write("\nEnter Request ID to approve/reject (or press Enter to go back): ");
-            string tripId = Console.ReadLine();
+            string tripIdStr = Console.ReadLine();
 
-            if (!string.IsNullOrEmpty(tripId))
+            if (!string.IsNullOrEmpty(tripIdStr))
             {
+                int tripId = int.Parse(tripIdStr);
                 ProcessBusinessTripApproval(tripId);
             }
         }
@@ -607,7 +607,7 @@ public class Program
         }
     }
 
-    private static void ProcessBusinessTripApproval(string tripId)
+    private static void ProcessBusinessTripApproval(int tripId)
     {
         Console.WriteLine("\n1. Approve");
         Console.WriteLine("2. Reject");
@@ -680,13 +680,17 @@ public class Program
         try
         {
             Console.Write("Enter Trip ID: ");
-            string tripId = Console.ReadLine();
+            string tripIdStr = Console.ReadLine();
+            if ( !string.IsNullOrEmpty( tripIdStr ) )
+            {
+                int tripId = int.Parse( tripIdStr );
 
-            Console.Write("Enter Actual Cost: ");
-            decimal actualCost = decimal.Parse(Console.ReadLine());
+                Console.Write("Enter Actual Cost: ");
+                decimal actualCost = decimal.Parse(Console.ReadLine());
 
-            businessTripService.UpdateActualCost(tripId, actualCost);
-            Console.WriteLine("Business trip cost updated successfully.");
+                businessTripService.UpdateActualCost(tripId, actualCost);
+                Console.WriteLine("Business trip cost updated successfully.");
+            }
         }
         catch (Exception ex)
         {
@@ -725,27 +729,28 @@ public class Program
         Console.WriteLine("\n--- Payroll by User ---");
 
         Console.Write("Enter User ID (leave blank for all users): ");
-        string userId = Console.ReadLine();
+        string userIdStr = Console.ReadLine();
 
         IEnumerable<Payroll> payrolls;
 
-        if (string.IsNullOrEmpty(userId))
+        if (string.IsNullOrEmpty(userIdStr))
         {
-            payrolls = payrollService.GetByPeriod(DateTime.Now.AddMonths(-6), DateTime.Now);
+            payrolls = payrollService.GetPayrollsByPeriod(DateTime.Now.AddMonths(-6), DateTime.Now);
         }
         else
         {
-            payrolls = payrollService.GetByUserId(userId);
+            int userId = int.Parse(userIdStr);
+            payrolls = payrollService.GetPayrollsByUserId(userId);
         }
 
         if (payrolls.Any())
         {
-            Console.WriteLine("ID\tUser\tPeriod\tBasic Salary\tAllowances\tTotal\tPayment Date\tStatus");
+            Console.WriteLine("ID\tUser\tPeriod\tBasic Salary\tPayment Date\tStatus");
             Console.WriteLine("------------------------------------------------------------------");
             foreach (var payroll in payrolls)
             {
                 var user = userService.GetUserById(payroll.UserId);
-                Console.WriteLine($"{payroll.Id}\t{user.Name}\t{payroll.PeriodStart.ToShortDateString()} - {payroll.PeriodEnd.ToShortDateString()}\t{payroll.BasicSalary:C}\t{payroll.TravelAllowance + payroll.MealAllowance + payroll.OtherAllowances:C}\t{payroll.TotalSalary:C}\t{payroll.PaymentDate.ToShortDateString()}\t{(payroll.IsPaid ? "Paid" : "Pending")}");
+                Console.WriteLine($"{payroll.Id}\t{user.Name}\t{payroll.PeriodStart.ToShortDateString()} - {payroll.PeriodEnd.ToShortDateString()}\t{payroll.BasicSalary:C}\t{payroll.PaymentDate.ToShortDateString()}\t{(payroll.IsPaid ? "Paid" : "Pending")}");
             }
         }
         else
@@ -768,16 +773,16 @@ public class Program
         Console.Write("End Date (yyyy-mm-dd): ");
         DateTime endDate = DateTime.Parse(Console.ReadLine());
 
-        var payrolls = payrollService.GetByPeriod(startDate, endDate);
+        var payrolls = payrollService.GetPayrollsByPeriod(startDate, endDate);
 
         if (payrolls.Any())
         {
-            Console.WriteLine("ID\tUser\tPeriod\tBasic Salary\tAllowances\tTotal\tPayment Date\tStatus");
+            Console.WriteLine("ID\tUser\tPeriod\tBasic Salary\tPayment Date\tStatus");
             Console.WriteLine("------------------------------------------------------------------");
             foreach (var payroll in payrolls)
             {
                 var user = userService.GetUserById(payroll.UserId);
-                Console.WriteLine($"{payroll.Id}\t{user.Name}\t{payroll.PeriodStart.ToShortDateString()} - {payroll.PeriodEnd.ToShortDateString()}\t{payroll.BasicSalary:C}\t{payroll.TravelAllowance + payroll.MealAllowance + payroll.OtherAllowances:C}\t{payroll.TotalSalary:C}\t{payroll.PaymentDate.ToShortDateString()}\t{(payroll.IsPaid ? "Paid" : "Pending")}");
+                Console.WriteLine($"{payroll.Id}\t{user.Name}\t{payroll.PeriodStart.ToShortDateString()} - {payroll.PeriodEnd.ToShortDateString()}\t{payroll.BasicSalary:C}\t{payroll.PaymentDate.ToShortDateString()}\t{(payroll.IsPaid ? "Paid" : "Pending")}");
             }
         }
         else
@@ -795,7 +800,7 @@ public class Program
         Console.WriteLine("\n--- Generate Payroll ---");
 
         Console.Write("User ID: ");
-        string userId = Console.ReadLine();
+        string userIdStr = Console.ReadLine();
 
         Console.Write("Period Start (yyyy-mm-dd): ");
         DateTime periodStart = DateTime.Parse(Console.ReadLine());
@@ -805,12 +810,10 @@ public class Program
 
         try
         {
+            int userId = int.Parse(userIdStr);
             var payroll = payrollService.GeneratePayroll(userId, periodStart, periodEnd);
             Console.WriteLine($"Payroll generated successfully. ID: {payroll.Id}");
             Console.WriteLine($"Basic Salary: {payroll.BasicSalary:C}");
-            Console.WriteLine($"Travel Allowance: {payroll.TravelAllowance:C}");
-            Console.WriteLine($"Meal Allowance: {payroll.MealAllowance:C}");
-            Console.WriteLine($"Total Salary: {payroll.TotalSalary:C}");
         }
         catch (Exception ex)
         {
@@ -827,11 +830,12 @@ public class Program
         Console.WriteLine("\n--- Mark Payroll as Paid ---");
 
         Console.Write("Payroll ID: ");
-        string payrollId = Console.ReadLine();
+        string payrollIdStr = Console.ReadLine();
 
         try
         {
-            payrollService.MarkAsPaid(payrollId);
+            int payrollId = int.Parse(payrollIdStr);
+            payrollService.MarkAsPaid(payrollId, loggedInUser.Id);
             Console.WriteLine("Payroll marked as paid successfully.");
         }
         catch (Exception ex)
