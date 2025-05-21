@@ -8,6 +8,9 @@ using Serilog;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
+Log.Logger = new LoggerConfiguration()
+    .WriteTo.Console()
+    .CreateLogger();
 
 builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
@@ -21,6 +24,16 @@ builder.Services.AddSingleton<ILeaveRequestRepository, InMemoryLeaveRequestRepos
 
 builder.Services.AddSingleton<IUserService, UserService>();
 builder.Services.AddSingleton<LeaveService>();
+
+builder.Services.AddSingleton<IUserRepository, InMemoryUserRepository>();
+builder.Services.AddSingleton<Serilog.ILogger>(Log.Logger);
+builder.Services.AddSingleton<UserService>();
+builder.Services.AddSingleton<IUserService, UserService>();
+builder.Services.AddSingleton<IBusinessTripRepository, InMemoryBusinessTripRepository>();
+builder.Services.AddSingleton<BusinessTripService>();
+builder.Services.AddSingleton<ILeaveRequestRepository, InMemoryLeaveRequestRepository>();
+builder.Services.AddSingleton<IPayrollRepository, InMemoryPayrollRepository>();
+builder.Services.AddSingleton<PayrollService>();
 
 var app = builder.Build();
 
