@@ -8,8 +8,93 @@ using System.Net.Http.Headers;
 using System.Runtime.CompilerServices;
 using Serilog;
 using CoreLibrary.ModelLib;
+using CoreLibrary.InterfaceLib;
+using CoreLibrary.Repository;
+using CoreLibrary.Service;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.AspNetCore.Hosting;
 
-// Define the different states of the application
+Log.Logger = CoreLibrary.LoggerConfig.ConfigureLogger();
+
+// CLI + API
+
+try
+{
+    var builder = WebApplication.CreateBuilder(args);
+
+    // API-specific services
+    builder.Services.AddControllers();
+    builder.Services.AddEndpointsApiExplorer();
+    builder.Services.AddSwaggerGen();
+
+    builder.Services.AddSingleton<Serilog.ILogger>(Log.Logger);
+    builder.Services.AddSingleton<IUserRepository, InMemoryUserRepository>();
+    builder.Services.AddSingleton<ILeaveRequestRepository, InMemoryLeaveRequestRepository>();
+    builder.Services.AddSingleton<IBusinessTripRepository, InMemoryBusinessTripRepository>();
+    builder.Services.AddSingleton<IPayrollRepository, InMemoryPayrollRepository>();
+
+    builder.Services.AddSingleton<UserService>();
+    builder.Services.AddSingleton<LeaveService>();
+    builder.Services.AddSingleton<BusinessTripService>();
+    builder.Services.AddSingleton<PayrollService>();
+
+    builder.Services.AddSingleton<IUserService, UserService>();
+    builder.Services.AddSingleton<ILeaveRequestService, LeaveService>();
+    builder.Services.AddSingleton<IBusinessTripService, BusinessTripService>();
+    builder.Services.AddSingleton<IPayrollService, PayrollService>();
+
+    var app = builder.Build();
+    if (app.Environment.IsDevelopment())
+    {
+        app.UseSwagger();
+        app.UseSwaggerUI();
+    }
+
+    app.UseHttpsRedirection();
+    app.UseAuthorization();
+    app.MapControllers();
+
+    var serviceProvider = builder.Services.BuildServiceProvider();
+
+    var userService = serviceProvider.GetRequiredService<UserService>();
+    var leaveService = serviceProvider.GetRequiredService<LeaveService>();
+    var businessTripService = serviceProvider.GetRequiredService<BusinessTripService>();
+    var payrollService = serviceProvider.GetRequiredService<PayrollService>();
+
+    InitializeTestData(userService);
+
+    var apiTask = Task.Run(() => app.RunAsync());
+
+    var cli = new Main(userService, leaveService, businessTripService, payrollService);
+
+    await cli.MainCLI();
+
+    await app.StopAsync();
+}
+catch (Exception ex)
+{
+    Log.Fatal(ex, "Application terminated unexpectedly");
+}
+finally
+{
+    Log.CloseAndFlush();
+}
+
+void InitializeTestData(UserService userService)
+{
+    try
+    {
+        userService.Register("Fizryan", "fizryan@mail.com", "password123", Role.SysAdmin, 50000000);
+        userService.Register("Naufal", "naufal@mail.com", "pass0000122231", Role.Employee, 2000000);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Error initializing test data: {ex.Message}");
+    }
+}
+
 public enum AppState
 {
     Login,
@@ -21,36 +106,27 @@ public enum AppState
     Exit
 }
 
-public class Program
+public class Main
 {
-
-    private static CoreLibrary.Service.UserService userService;
-    private static CoreLibrary.Service.LeaveService leaveService;
-    private static CoreLibrary.Service.BusinessTripService businessTripService;
-    private static CoreLibrary.Service.PayrollService payrollService;
+    private static UserService userService;
+    private static LeaveService leaveService;
+    private static BusinessTripService businessTripService;
+    private static PayrollService payrollService;
 
     private static User loggedInUser = null;
     private static AppState currentState = AppState.Login;
     private static AppState previousState = AppState.Login;
 
-    private static ILogger logger = CoreLibrary.LoggerConfig.ConfigureLogger();
-    //private static ILogger logger = null;
-
-    public static void Main(string[] args)
+    public Main(UserService userSvc, LeaveService leaveSvc, BusinessTripService businessTripSvc, PayrollService payrollSvc)
     {
-        var userRepo = new CoreLibrary.Repository.InMemoryUserRepository(logger);
-        var leaveRepo = new CoreLibrary.Repository.InMemoryLeaveRequestRepository(logger);
-        var tripRepo = new CoreLibrary.Repository.InMemoryBusinessTripRepository(logger);
-        var payrollRepo = new CoreLibrary.Repository.InMemoryPayrollRepository(logger);
+        userService = userSvc;
+        leaveService = leaveSvc;
+        businessTripService = businessTripSvc;
+        payrollService = payrollSvc;
+    }
 
-        userService = new CoreLibrary.Service.UserService(userRepo, logger);
-        leaveService = new CoreLibrary.Service.LeaveService(leaveRepo, userService, logger);
-        businessTripService = new CoreLibrary.Service.BusinessTripService(tripRepo, userRepo, logger);
-        payrollService = new CoreLibrary.Service.PayrollService(payrollRepo, userRepo, leaveRepo, tripRepo, logger);
-
-        // Add some initial users for testing
-        InitializeTestData();
-
+    public async Task MainCLI()
+    {
         Console.WriteLine("Welcome to the Company Management System!");
 
         // Main application loop (Automata)
@@ -68,19 +144,6 @@ public class Program
 
         Console.WriteLine("Thank you for using the Company Management System!");
     }
-    private static void InitializeTestData()
-    {
-        try
-        {
-            userService.Register("Fizryan", "fizryan@mail.com", "password123", Role.SysAdmin, 50000000);
-            userService.Register("Naufal", "naufal@mail.com", "pass0000122231", Role.Employee, 2000000);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error initializing test data: {ex.Message}");
-        }
-    }
-
 
     private static void ProcessState()
     {
