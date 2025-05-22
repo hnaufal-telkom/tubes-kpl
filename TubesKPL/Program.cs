@@ -15,6 +15,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.AspNetCore.Hosting;
+using System.Diagnostics;
 
 Log.Logger = CoreLibrary.LoggerConfig.ConfigureLogger();
 
@@ -58,20 +59,23 @@ try
 
     var serviceProvider = builder.Services.BuildServiceProvider();
 
-    var userService = serviceProvider.GetRequiredService<UserService>();
-    var leaveService = serviceProvider.GetRequiredService<LeaveService>();
-    var businessTripService = serviceProvider.GetRequiredService<BusinessTripService>();
-    var payrollService = serviceProvider.GetRequiredService<PayrollService>();
+    InitializeTestData(serviceProvider.GetRequiredService<UserService>());
 
-    InitializeTestData(userService);
-
-    var apiTask = Task.Run(() => app.RunAsync());
-
-    var cli = new Main(userService, leaveService, businessTripService, payrollService);
-
-    await cli.MainCLI();
-
-    await app.StopAsync();
+    if (args.Contains("--cli"))
+    {
+        var cli = new Main(
+            serviceProvider.GetRequiredService<UserService>(),
+            serviceProvider.GetRequiredService<LeaveService>(),
+            serviceProvider.GetRequiredService<BusinessTripService>(),
+            serviceProvider.GetRequiredService<PayrollService>()
+        );
+        cli.MainCLI().Wait();
+    }
+    else
+    {
+        LaunchCli();
+        await app.RunAsync();
+    }
 }
 catch (Exception ex)
 {
@@ -80,6 +84,29 @@ catch (Exception ex)
 finally
 {
     Log.CloseAndFlush();
+}
+
+void LaunchCli()
+{
+    try
+    {
+        var processInfo = new ProcessStartInfo
+        {
+            FileName = OperatingSystem.IsWindows() ? "cmd.exe" : "/bin/bash",
+            Arguments = OperatingSystem.IsWindows()
+                ? $"/k dotnet run --project {Path.GetFileName(Directory.GetCurrentDirectory())}.csproj --cli"
+                : $"-c \"dotnet run --project {Path.GetFileName(Directory.GetCurrentDirectory())}.csproj --cli\"",
+            UseShellExecute = true,
+            CreateNoWindow = false,
+            WindowStyle = ProcessWindowStyle.Normal
+        };
+
+        Process.Start(processInfo);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"Failed to launch CLI: {ex.Message}");
+    }
 }
 
 void InitializeTestData(UserService userService)
