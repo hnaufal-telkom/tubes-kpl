@@ -1,0 +1,140 @@
+﻿<Page x:Class="MainGUI.Page.Employee.LeavePage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"  
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"  
+      xmlns:local="clr-namespace:MainGUI.Page.Employee"
+      mc:Ignorable="d"  
+      d:DesignHeight="600" d:DesignWidth="800"
+      Title="LeavePage"
+      Background="{StaticResource PrimaryBackgroundColor}">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Background="{StaticResource SecondaryBackgroundColor}" Padding="20"
+                BorderBrush="{StaticResource PrimaryBackgroundColor}" BorderThickness="0,0,0,1">
+            <TextBlock Text="My Leave Requests" 
+                       Foreground="{StaticResource TextColor}" 
+                       FontSize="28" 
+                       FontWeight="Bold" 
+                       VerticalAlignment="Center"/>
+        </Border>
+
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="20">
+                <Border Style="{StaticResource ContentCardStyle}" Margin="10,0,10,20">
+                    <StackPanel>
+                        <TextBlock Text="Submit New Leave Request" Style="{StaticResource SectionTitleStyle}"/>
+
+                        <Grid Margin="0,10,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Grid.Row="0" Grid.Column="0" Style="{StaticResource FormLabelStyle}" Text="Start Date:"/>
+                            <Grid Grid.Row="1" Grid.Column="0" Margin="5,5,5,5">
+                                <DatePicker Name="StartDatePicker" Style="{StaticResource ModernDatePicker}" Tag="4"/>
+                                <TextBlock Text="Pick Start Date" IsHitTestVisible="False"
+                                           Foreground="#777777" 
+                                           Padding="{Binding Padding, ElementName=StartDatePicker}"
+                                           VerticalAlignment="Center" HorizontalAlignment="Left" Margin="1,0,0,0">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding SelectedDate, ElementName=StartDatePicker}" Value="{x:Null}">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Grid>
+
+                            <TextBlock Grid.Row="0" Grid.Column="1" Style="{StaticResource FormLabelStyle}" Text="End Date:"/>
+                            <Grid Grid.Row="1" Grid.Column="1" Margin="5,5,5,5">
+                                <DatePicker Name="EndDatePicker" Style="{StaticResource ModernDatePicker}" Tag="4"/>
+                                <TextBlock Text="Pick End Date" IsHitTestVisible="False"
+                                           Foreground="#777777" 
+                                           Padding="{Binding Padding, ElementName=EndDatePicker}"
+                                           VerticalAlignment="Center" HorizontalAlignment="Left" Margin="1,0,0,0">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding SelectedDate, ElementName=EndDatePicker}" Value="{x:Null}">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Grid>
+
+                            <TextBlock Grid.Row="2" Grid.Column="0" Style="{StaticResource FormLabelStyle}" Text="Description:"/>
+                            <Grid Grid.Row="3" Grid.Column="0" Margin="5,5,5,5">
+                                <TextBox Name="DescriptionTextBox" Style="{StaticResource ModernTextBox}" Tag="4" TextWrapping="Wrap" AcceptsReturn="True" VerticalScrollBarVisibility="Auto"/>
+                                <TextBlock Text="Describe reason for leave" IsHitTestVisible="False"
+                                           Foreground="#777777" 
+                                           Padding="{Binding Padding, ElementName=DescriptionTextBox}"
+                                           VerticalAlignment="Top" HorizontalAlignment="Left" Margin="1,0,0,0">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Text, ElementName=DescriptionTextBox}" Value="">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Grid>
+                        </Grid>
+
+                        <Button Content="Submit Leave Request" HorizontalAlignment="Right" Width="200" Click="SubmitLeaveRequest_Click" Margin="5,20,5,5"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource ContentCardStyle}" Margin="10,0,10,10">
+                    <StackPanel>
+                        <TextBlock Text="My Leave History" Style="{StaticResource SectionTitleStyle}"/>
+
+                        <Border Style="{StaticResource TableRowHeaderStyle}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="1.5*"/>
+                                    <ColumnDefinition Width="1.5*"/>
+                                    <ColumnDefinition Width="1.5*"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="Type" Foreground="{StaticResource TextColor}" FontWeight="Bold"/>
+                                <TextBlock Grid.Column="1" Text="Start Date" Foreground="{StaticResource TextColor}" FontWeight="Bold"/>
+                                <TextBlock Grid.Column="2" Text="End Date" Foreground="{StaticResource TextColor}" FontWeight="Bold"/>
+                                <TextBlock Grid.Column="3" Text="Duration" Foreground="{StaticResource TextColor}" FontWeight="Bold"/>
+                                <TextBlock Grid.Column="4" Text="Status" Foreground="{StaticResource TextColor}" FontWeight="Bold"/>
+                            </Grid>
+                        </Border>
+
+                        <StackPanel x:Name="LeaveHistoryStackPanel" Margin="0,5,0,0">
+                        </StackPanel>
+
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</Page>

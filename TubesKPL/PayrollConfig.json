@@ -1,0 +1,15 @@
+{
+  "PayrollConfig": {
+    "SalaryRates": {
+      "Employee": 5000000,
+      "Supervisor": 8000000,
+      "HRD": 10000000,
+      "Finance": 12000000,
+      "SysAdmin": 15000000
+    },
+    "Allowances": {
+      "Meal": 2000000,
+      "TravelAllowance": 3000000
+    }
+  }
+}
